@@ -1,0 +1,161 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shopper-plus-backend
+  labels:
+    app: shopper-plus-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: shopper-plus-backend
+  template:
+    metadata:
+      labels:
+        app: shopper-plus-backend
+    spec:
+      serviceAccountName: shopper
+      securityContext:
+          runAsUser: 1000
+          fsGroup: 1000
+      containers:
+      - name: shopper-plus-backend
+        securityContext:
+          runAsUser: 1000
+          # allowPrivilegeEscalation: false
+        image: registry.redcloud.land/shopper-plus-backend:latest
+        ports:
+        - containerPort: 3000
+        envFrom:
+        - configMapRef:
+            name: shopper-plus-config
+        env:
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: shopper-plus-secrets
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: shopper-plus-secrets
+              key: DB_PASSWORD
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: shopper-plus-secrets
+              key: JWT_SECRET
+        - name: TOR_CONTROL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: shopper-plus-secrets
+              key: TOR_CONTROL_PASSWORD
+        - name: APN_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: shopper-plus-secrets
+              key: APN_KEY_ID
+        - name: APN_TEAM_ID
+          valueFrom:
+            secretKeyRef:
+              name: shopper-plus-secrets
+              key: APN_TEAM_ID
+        - name: APN_BUNDLE_ID
+          valueFrom:
+            secretKeyRef:
+              name: shopper-plus-secrets
+              key: APN_BUNDLE_ID
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 30 
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shopper-plus-backend-service
+  labels:
+    app: shopper-plus-backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 3000
+    protocol: TCP
+  selector:
+    app: shopper-plus-backend
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shopper-plus-scraper
+  labels:
+    app: shopper-plus-scraper
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: shopper-plus-scraper
+  template:
+    metadata:
+      labels:
+        app: shopper-plus-scraper
+    spec:
+      serviceAccountName: shopper
+      securityContext:
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: shopper-plus-scraper
+        securityContext:
+          runAsUser: 1000
+          # allowPrivilegeEscalation: false
+        image: registry.redcloud.land/shopper-plus-backend:latest
+        command: ["node", "src/scrapers/worker.js"]
+        envFrom:
+        - configMapRef:
+            name: shopper-plus-config
+        env:
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: shopper-plus-secrets
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: shopper-plus-secrets
+              key: DB_PASSWORD
+        - name: TOR_CONTROL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: shopper-plus-secrets
+              key: TOR_CONTROL_PASSWORD
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

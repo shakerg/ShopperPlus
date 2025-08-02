@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: registry.redcloud.land/rhel9/postgresql-15:latest
+    environment:
+      POSTGRESQL_DATABASE: shopperplus
+      POSTGRESQL_USER: shopperplus
+      POSTGRESQL_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopperplus"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  memcached:
+    image: registry.redcloud.land/rhel9/memcached:latest
+    ports:
+      - "11211:11211"
+    command: ["-m", "128"]
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "11211"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  tor-proxy:
+    build:
+      context: ./tor-proxy
+      dockerfile: Dockerfile
+    ports:
+      - "9050:9050"
+      - "9051:9051"
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9050"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - .env.development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      memcached:
+        condition: service_healthy
+      tor-proxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_data:

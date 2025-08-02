@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shopper-plus-config
+  labels:
+    app: shopper-plus
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  DB_HOST: "postgresql-service"
+  DB_PORT: "5432"
+  DB_NAME: "shopperplus"
+  DB_SSL: "false"
+  MEMCACHED_HOST: "memcached-service"
+  MEMCACHED_PORT: "11211"
+  TOR_PROXY_HOST: "tor-proxy-service"
+  TOR_PROXY_PORT: "9050"
+  TOR_CONTROL_PORT: "9051"
+  PRICE_CACHE_TTL: "3600"
+  PRODUCT_META_CACHE_TTL: "86400"
+  API_CACHE_TTL: "1800"
+  MAX_CONCURRENT_SCRAPERS: "10"
+  SCRAPER_DELAY_MS: "2000"
+  SCRAPER_CONTINUOUS: "true"
+  SCRAPER_INTERVAL_MS: "30000"
+  CIRCUIT_ROTATION_REQUESTS: "75"
+  RATE_LIMIT_WINDOW_MS: "900000"
+  RATE_LIMIT_MAX_REQUESTS: "100"
+  LOG_LEVEL: "info"
+  JWT_EXPIRES_IN: "7d"

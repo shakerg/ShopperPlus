@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql
+  labels:
+    app: postgresql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:      
+      serviceAccountName: shopper
+      securityContext:
+        runAsUser: 26
+        fsGroup: 26
+      containers:
+      - name: postgresql
+        securityContext:
+          runAsUser: 26
+          allowPrivilegeEscalation: false
+        image: registry.redcloud.land/rhel9/postgresql-15:latest
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRESQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: shopper-plus-secrets
+              key: DB_USER
+        - name: POSTGRESQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: shopper-plus-secrets
+              key: DB_PASSWORD
+        - name: POSTGRESQL_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: shopper-plus-config
+              key: DB_NAME
+        # Add SSL configuration
+        - name: POSTGRESQL_SSL_CERT_FILE
+          value: "/var/lib/pgsql/ssl/server.crt"
+        - name: POSTGRESQL_SSL_KEY_FILE
+          value: "/var/lib/pgsql/ssl/server.key"
+        - name: POSTGRESQL_SSL_MODE
+          value: "on"
+        volumeMounts:
+        - name: postgresql-storage
+          mountPath: /var/lib/pgsql/data
+        # Mount SSL certificates
+        - name: ssl-certs
+          mountPath: /var/lib/pgsql/ssl
+          readOnly: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - pg_isready -U $POSTGRESQL_USER -d $POSTGRESQL_DATABASE
+          initialDelaySeconds: 5
+          timeoutSeconds: 1
+      volumes:
+      - name: postgresql-storage
+        persistentVolumeClaim:
+          claimName: postgresql-pvc
+      # Add SSL certificates volume
+      - name: ssl-certs
+        secret:
+          secretName: postgresql-ssl-certs
+          defaultMode: 0600
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql-service
+  labels:
+    app: postgresql
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: postgresql
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-pvc
+  labels:
+    app: postgresql
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
