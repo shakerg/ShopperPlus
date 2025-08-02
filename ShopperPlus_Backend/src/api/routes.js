@@ -23,6 +23,26 @@ const productSchema = Joi.object({
   url: Joi.string().uri().required()
 });
 
+const priceCheckSchema = Joi.object({
+  url: Joi.string().uri().required()
+});
+
+const syncRequestSchema = Joi.object({
+  items: Joi.array().items(
+    Joi.object({
+      id: Joi.string().required(),
+      url: Joi.string().uri().required(),
+      lastUpdated: Joi.date().required()
+    })
+  ).required()
+});
+
+const notificationSchema = Joi.object({
+  deviceToken: Joi.string().required(),
+  userId: Joi.string().required(),
+  platform: Joi.string().valid('ios', 'android').required()
+});
+
 // Add CORS headers middleware for all routes
 router.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -343,6 +363,301 @@ v1Router.delete('/watchlist/:userId/:productId', async (req, res, next) => {
     res.json({
       success: true,
       message: 'Product removed from watchlist'
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/v1/products/info - Get product information (for iOS app compatibility)
+v1Router.post('/products/info', async (req, res, next) => {
+  try {
+    const { error, value } = productSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation Error',
+        details: error.details[0].message
+      });
+    }
+
+    const { url } = value;
+
+    // Check if product already exists and has data
+    const existingProduct = await database.query(
+      `SELECT id, title, image_url, current_price, currency, last_checked, 
+              created_at
+       FROM products 
+       WHERE canonical_url = $1`,
+      [url]
+    );
+
+    if (existingProduct.rows.length > 0) {
+      const product = existingProduct.rows[0];
+      
+      // Return existing product data in the format iOS app expects
+      return res.json({
+        title: product.title || 'Product',
+        price: product.current_price,
+        currency: product.currency || 'USD',
+        imageUrl: product.image_url,
+        availability: product.current_price ? 'Available' : 'Unknown',
+        lastUpdated: product.last_checked || product.created_at
+      });
+    }
+
+    // Product doesn't exist, create it and queue for scraping
+    const result = await database.query(
+      'INSERT INTO products (canonical_url) VALUES ($1) RETURNING id, created_at',
+      [url]
+    );
+
+    const productId = result.rows[0].id;
+    const createdAt = result.rows[0].created_at;
+
+    // Queue for immediate scraping
+    await database.query(
+      'INSERT INTO scrape_jobs (product_id, status) VALUES ($1, $2)',
+      [productId, 'pending']
+    );
+
+    // Trigger scraping process
+    scraperService.processQueue().catch(error => {
+      logger.error('Failed to trigger scraper:', error);
+    });
+
+    // Return basic info while scraping happens in background
+    res.json({
+      title: 'Loading product info...',
+      price: null,
+      currency: 'USD',
+      imageUrl: null,
+      availability: 'Checking...',
+      lastUpdated: createdAt
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/v1/prices/check - Check current price for a URL (iOS app compatibility)
+v1Router.post('/prices/check', async (req, res, next) => {
+  try {
+    const { error, value } = productSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation Error',
+        details: error.details[0].message
+      });
+    }
+
+    const { url } = value;
+
+    // Check if product exists
+    const product = await database.query(
+      `SELECT id, title, current_price, currency, last_checked, created_at
+       FROM products 
+       WHERE canonical_url = $1`,
+      [url]
+    );
+
+    if (product.rows.length === 0) {
+      return res.json({
+        price: null,
+        currency: 'USD',
+        availability: 'Not found',
+        lastUpdated: new Date(),
+        success: false,
+        error: 'Product not found'
+      });
+    }
+
+    const productData = product.rows[0];
+    
+    // Check if price data is stale (older than 1 hour)
+    const lastChecked = new Date(productData.last_checked || productData.created_at);
+    const isStale = Date.now() - lastChecked.getTime() > 3600000; // 1 hour
+
+    if (isStale) {
+      // Queue for re-scraping
+      await database.query(
+        'INSERT INTO scrape_jobs (product_id, status) VALUES ($1, $2)',
+        [productData.id, 'pending']
+      );
+      
+      // Trigger scraping process
+      scraperService.processQueue().catch(error => {
+        logger.error('Failed to trigger scraper:', error);
+      });
+    }
+
+    res.json({
+      price: productData.current_price,
+      currency: productData.currency || 'USD',
+      availability: productData.current_price ? 'Available' : 'Unknown',
+      lastUpdated: lastChecked,
+      success: true,
+      error: null
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/v1/prices/sync - Sync prices for multiple items (iOS app compatibility)
+v1Router.post('/prices/sync', async (req, res, next) => {
+  try {
+    // Validate the sync request structure
+    const syncRequestSchema = Joi.object({
+      items: Joi.array().items(
+        Joi.object({
+          id: Joi.string().required(),
+          url: Joi.string().uri().required(),
+          lastUpdated: Joi.date().required()
+        })
+      ).required()
+    });
+
+    const { error, value } = syncRequestSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation Error',
+        details: error.details[0].message
+      });
+    }
+
+    const { items } = value;
+    const updates = [];
+
+    for (const item of items) {
+      try {
+        // Check if product exists
+        const product = await database.query(
+          `SELECT id, title, current_price, currency, last_checked, created_at
+           FROM products 
+           WHERE canonical_url = $1`,
+          [item.url]
+        );
+
+        if (product.rows.length === 0) {
+          // Product doesn't exist, create it
+          const newProduct = await database.query(
+            'INSERT INTO products (canonical_url) VALUES ($1) RETURNING id, created_at',
+            [item.url]
+          );
+
+          const productId = newProduct.rows[0].id;
+          const createdAt = newProduct.rows[0].created_at;
+
+          // Queue for scraping
+          await database.query(
+            'INSERT INTO scrape_jobs (product_id, status) VALUES ($1, $2)',
+            [productId, 'pending']
+          );
+
+          updates.push({
+            id: item.id,
+            price: null,
+            currency: 'USD',
+            availability: 'Checking...',
+            lastUpdated: createdAt,
+            success: true,
+            error: null
+          });
+        } else {
+          const productData = product.rows[0];
+          const lastChecked = new Date(productData.last_checked || productData.created_at);
+          const clientLastUpdated = new Date(item.lastUpdated);
+          
+          // Check if we need to update
+          const needsUpdate = lastChecked < clientLastUpdated || 
+                            Date.now() - lastChecked.getTime() > 3600000; // 1 hour
+
+          if (needsUpdate) {
+            // Queue for re-scraping
+            await database.query(
+              'INSERT INTO scrape_jobs (product_id, status) VALUES ($1, $2)',
+              [productData.id, 'pending']
+            );
+          }
+
+          updates.push({
+            id: item.id,
+            price: productData.current_price,
+            currency: productData.currency || 'USD',
+            availability: productData.current_price ? 'Available' : 'Unknown',
+            lastUpdated: lastChecked,
+            success: true,
+            error: null
+          });
+        }
+      } catch (itemError) {
+        logger.error('Error processing sync item:', { url: item.url, error: itemError.message });
+        updates.push({
+          id: item.id,
+          price: null,
+          currency: 'USD',
+          availability: 'Error',
+          lastUpdated: new Date(),
+          success: false,
+          error: itemError.message
+        });
+      }
+    }
+
+    // Trigger scraping process for any queued items
+    scraperService.processQueue().catch(error => {
+      logger.error('Failed to trigger scraper:', error);
+    });
+
+    res.json({
+      updates,
+      success: true,
+      timestamp: new Date()
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/v1/notifications/register - Register device for push notifications
+v1Router.post('/notifications/register', async (req, res, next) => {
+  try {
+    const notificationSchema = Joi.object({
+      deviceToken: Joi.string().required(),
+      userId: Joi.string().required(),
+      platform: Joi.string().valid('ios', 'android').required()
+    });
+
+    const { error, value } = notificationSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation Error',
+        details: error.details[0].message
+      });
+    }
+
+    const { deviceToken, userId, platform } = value;
+
+    // For now, just log the registration (you can expand this later)
+    logger.info('Device registered for notifications:', {
+      userId,
+      platform,
+      deviceToken: deviceToken.substring(0, 10) + '...' // Log partial token for security
+    });
+
+    // TODO: Store device tokens in database and integrate with push notification service
+    // For now, just return success
+    res.json({
+      success: true,
+      message: 'Device registered for notifications'
     });
 
   } catch (error) {

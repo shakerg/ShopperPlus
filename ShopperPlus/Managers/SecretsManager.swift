@@ -41,7 +41,7 @@ class SecretsManager {
     // MARK: - API Configuration
 
     var apiBaseURL: String {
-        return getString(for: "API_BASE_URL") ?? "https://api.shopper.vuwing-digital.com/v1"
+        return getString(for: "API_BASE_URL") ?? "https://api.shopper.vuwing-digital.com/api/v1"
     }
 
     var apiHealthURL: String {
