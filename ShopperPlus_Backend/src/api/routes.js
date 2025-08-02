@@ -23,8 +23,24 @@ const productSchema = Joi.object({
   url: Joi.string().uri().required()
 });
 
-// POST /api/sync - Sync user watchlist from CloudKit
-router.post('/sync', async (req, res, next) => {
+// Add CORS headers middleware for all routes
+router.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
+// Create v1 router
+const v1Router = express.Router();
+
+// POST /api/v1/sync - Sync user watchlist from CloudKit
+v1Router.post('/sync', async (req, res, next) => {
   try {
     const { error, value } = syncSchema.validate(req.body);
     if (error) {
@@ -153,8 +169,8 @@ router.post('/sync', async (req, res, next) => {
   }
 });
 
-// GET /api/price/:productId - Get current price for a product
-router.get('/price/:productId', async (req, res, next) => {
+// GET /api/v1/price/:productId - Get current price for a product
+v1Router.get('/price/:productId', async (req, res, next) => {
   try {
     const productId = parseInt(req.params.productId);
     
@@ -211,8 +227,8 @@ router.get('/price/:productId', async (req, res, next) => {
   }
 });
 
-// POST /api/product - Add a new product for monitoring
-router.post('/product', async (req, res, next) => {
+// POST /api/v1/product - Add a new product for monitoring
+v1Router.post('/product', async (req, res, next) => {
   try {
     const { error, value } = productSchema.validate(req.body);
     if (error) {
@@ -275,8 +291,8 @@ router.post('/product', async (req, res, next) => {
   }
 });
 
-// GET /api/products - Get all products for a user
-router.get('/products', async (req, res, next) => {
+// GET /api/v1/products - Get all products for a user
+v1Router.get('/products', async (req, res, next) => {
   try {
     const { userId } = req.query;
     
@@ -307,8 +323,8 @@ router.get('/products', async (req, res, next) => {
   }
 });
 
-// DELETE /api/watchlist/:userId/:productId - Remove product from user's watchlist
-router.delete('/watchlist/:userId/:productId', async (req, res, next) => {
+// DELETE /api/v1/watchlist/:userId/:productId - Remove product from user's watchlist
+v1Router.delete('/watchlist/:userId/:productId', async (req, res, next) => {
   try {
     const { userId, productId } = req.params;
     
@@ -333,6 +349,9 @@ router.delete('/watchlist/:userId/:productId', async (req, res, next) => {
     next(error);
   }
 });
+
+// Mount v1 routes under /api/v1
+router.use('/v1', v1Router);
 
 // POST /api/scrape/trigger - Manually trigger scraping (for testing)
 router.post('/scrape/trigger', async (req, res, next) => {
