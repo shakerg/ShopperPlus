@@ -150,9 +150,9 @@ class CloudKitManager: ObservableObject {
         */
         syncStatus = .success
     }
-    
+
     // MARK: - Share Extension Support
-    
+
     func checkForSharedItems() {
         // This method can be called when the main app becomes active
         // to check if any new items were added via the Share Extension

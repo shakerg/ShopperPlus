@@ -32,7 +32,7 @@ class NetworkingService: ObservableObject {
         config.timeoutIntervalForResource = 30.0
         config.waitsForConnectivity = false
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        
+
         // Additional settings to prevent nw_connection issues
         config.allowsCellularAccess = true
         config.allowsConstrainedNetworkAccess = true
@@ -41,17 +41,17 @@ class NetworkingService: ObservableObject {
         // Note: httpShouldUsePipelining is deprecated in iOS 18.4+, HTTP/2 and HTTP/3 are preferred
         config.urlCredentialStorage = nil
         config.urlCache = nil
-        
+
         self.session = URLSession(configuration: config)
         checkNetworkStatus()
         observeAppStateChanges()
     }
-    
+
     deinit {
         // Clean up URLSession to prevent connection leaks
         session.invalidateAndCancel()
         cancellables.removeAll()
-        
+
         // End background task if active - properly handled on main actor
         let taskID = backgroundTaskID
         if taskID != .invalid {
@@ -70,7 +70,7 @@ class NetworkingService: ObservableObject {
                 self?.checkNetworkStatus()
             }
             .store(in: &cancellables)
-        
+
         NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
             .sink { [weak self] _ in
                 // Reduce network activity when app goes to background
@@ -78,7 +78,7 @@ class NetworkingService: ObservableObject {
             }
             .store(in: &cancellables)
     }
-    
+
     private func handleAppBackgrounding() {
         // Start a background task to safely complete any ongoing network operations
         Task { @MainActor in
@@ -112,14 +112,14 @@ class NetworkingService: ObservableObject {
             await performPingCheck()
         }
     }
-    
+
     private func performPingCheck() async {
         // Use the health endpoint from secrets
-        guard let url = URL(string: healthURL) else { 
+        guard let url = URL(string: healthURL) else {
             await MainActor.run {
                 self.isOnline = false
             }
-            return 
+            return
         }
 
         // Create URLRequest with timeout to prevent hanging connections
@@ -130,7 +130,7 @@ class NetworkingService: ObservableObject {
 
         do {
             let (_, response) = try await session.data(for: request)
-            
+
             await MainActor.run {
                 if let httpResponse = response as? HTTPURLResponse {
                     // Accept 200 (OK) or 503 (Service Unavailable) as "online"
@@ -185,7 +185,38 @@ class NetworkingService: ObservableObject {
             throw NetworkingError.serverError(httpResponse.statusCode)
         }
 
-        return try JSONDecoder().decode(ProductInfo.self, from: data)
+        let decoder = JSONDecoder()
+        
+        // Create a flexible date decoding strategy to handle various ISO 8601 formats
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
+            
+            // Try different ISO 8601 formats
+            let formats = [
+                "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",  // With microseconds
+                "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",     // With milliseconds
+                "yyyy-MM-dd'T'HH:mm:ss'Z'",         // Without fractional seconds
+                "yyyy-MM-dd'T'HH:mm:ssZ",           // Alternative format
+                "yyyy-MM-dd'T'HH:mm:ss.SSSZ"       // With milliseconds no Z
+            ]
+            
+            for format in formats {
+                formatter.dateFormat = format
+                if let date = formatter.date(from: dateString) {
+                    return date
+                }
+            }
+            
+            // If all formats fail, throw an error
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date string \(dateString)")
+        }
+        
+        return try decoder.decode(ProductInfo.self, from: data)
     }
 
     // MARK: - Price Checking
@@ -212,7 +243,38 @@ class NetworkingService: ObservableObject {
             throw NetworkingError.serverError(httpResponse.statusCode)
         }
 
-        return try JSONDecoder().decode(PriceCheckResponse.self, from: data)
+        let decoder = JSONDecoder()
+        
+        // Create a flexible date decoding strategy to handle various ISO 8601 formats
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
+            
+            // Try different ISO 8601 formats
+            let formats = [
+                "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",  // With microseconds
+                "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",     // With milliseconds
+                "yyyy-MM-dd'T'HH:mm:ss'Z'",         // Without fractional seconds
+                "yyyy-MM-dd'T'HH:mm:ssZ",           // Alternative format
+                "yyyy-MM-dd'T'HH:mm:ss.SSSZ"       // With milliseconds no Z
+            ]
+            
+            for format in formats {
+                formatter.dateFormat = format
+                if let date = formatter.date(from: dateString) {
+                    return date
+                }
+            }
+            
+            // If all formats fail, throw an error
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date string \(dateString)")
+        }
+        
+        return try decoder.decode(PriceCheckResponse.self, from: data)
     }
 
     // MARK: - Bulk Price Updates
@@ -246,7 +308,38 @@ class NetworkingService: ObservableObject {
             throw NetworkingError.serverError(httpResponse.statusCode)
         }
 
-        let syncResponse = try JSONDecoder().decode(SyncResponse.self, from: data)
+        let decoder = JSONDecoder()
+        
+        // Create a flexible date decoding strategy to handle various ISO 8601 formats
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
+            
+            // Try different ISO 8601 formats
+            let formats = [
+                "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",  // With microseconds
+                "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",     // With milliseconds
+                "yyyy-MM-dd'T'HH:mm:ss'Z'",         // Without fractional seconds
+                "yyyy-MM-dd'T'HH:mm:ssZ",           // Alternative format
+                "yyyy-MM-dd'T'HH:mm:ss.SSSZ"       // With milliseconds no Z
+            ]
+            
+            for format in formats {
+                formatter.dateFormat = format
+                if let date = formatter.date(from: dateString) {
+                    return date
+                }
+            }
+            
+            // If all formats fail, throw an error
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date string \(dateString)")
+        }
+        
+        let syncResponse = try decoder.decode(SyncResponse.self, from: data)
         return syncResponse.updates
     }
 

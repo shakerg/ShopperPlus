@@ -9,6 +9,8 @@ import SwiftUI
 
 struct TrackedItemsListView: View {
     @EnvironmentObject var viewModel: ShopperPlusViewModel
+    @ObservedObject private var networkingService = NetworkingService.shared
+    @State private var showingAPITest = false
 
     var body: some View {
         Group {
@@ -72,6 +74,19 @@ struct TrackedItemsListView: View {
                     .background(Color(.systemBackground))
             }
         }
+        .overlay(alignment: .bottom) {
+            // Network status banner
+            if !networkingService.isOnline {
+                NetworkStatusBanner {
+                    showingAPITest = true
+                }
+            }
+        }
+        .sheet(isPresented: $showingAPITest) {
+            APITestView()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private func deleteItems(offsets: IndexSet) {
@@ -79,6 +94,46 @@ struct TrackedItemsListView: View {
             let item = viewModel.filteredItems[index]
             viewModel.deleteItem(item)
         }
+    }
+}
+
+struct NetworkStatusBanner: View {
+    let onTestTap: () -> Void
+
+    var body: some View {
+        HStack {
+            Image(systemName: "wifi.slash")
+                .foregroundColor(.white)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Network Issue")
+                    .font(.bodyRoboto)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+
+                Text("Check your connection or test API")
+                    .font(.caption1Roboto)
+                    .foregroundColor(.white.opacity(0.9))
+            }
+
+            Spacer()
+
+            Button("Test API") {
+                onTestTap()
+            }
+            .font(.caption1Roboto)
+            .fontWeight(.medium)
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.white.opacity(0.2))
+            .cornerRadius(6)
+        }
+        .padding()
+        .background(Color.red)
+        .cornerRadius(12)
+        .padding(.horizontal)
+        .padding(.bottom, 8)
     }
 }
 

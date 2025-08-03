@@ -11,11 +11,10 @@ struct SettingsView: View {
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("hapticsEnabled") private var hapticsEnabled = true
     @AppStorage("darkModeEnabled") private var darkModeEnabled = false
-    
+
     @State private var logoTapCount = 0
-    @State private var showDebugSection = false
-    @State private var showingDebugView = false
-    
+    @State private var showingDebugConsole = false
+
     var body: some View {
         NavigationStack {
             List {
@@ -35,7 +34,7 @@ struct SettingsView: View {
                         Spacer()
                         Toggle("", isOn: $soundEnabled)
                     }
-                    
+
                     HStack {
                         Image(systemName: "iphone.radiowaves.left.and.right")
                             .foregroundColor(.orange)
@@ -50,7 +49,7 @@ struct SettingsView: View {
                         Spacer()
                         Toggle("", isOn: $hapticsEnabled)
                     }
-                    
+
                     HStack {
                         Image(systemName: darkModeEnabled ? "moon.fill" : "sun.max")
                             .foregroundColor(darkModeEnabled ? .purple : .yellow)
@@ -66,9 +65,12 @@ struct SettingsView: View {
                         Toggle("", isOn: $darkModeEnabled)
                     }
                 }
-                
+
                 // Support Section
                 Section("Support & Information") {
+                    // API Status (always visible)
+                    APIStatusRow()
+
                     SettingsRowView(
                         icon: "doc.text",
                         iconColor: .green,
@@ -77,7 +79,7 @@ struct SettingsView: View {
                     ) {
                         // TODO: Open user guide
                     }
-                    
+
                     SettingsRowView(
                         icon: "doc.plaintext",
                         iconColor: .blue,
@@ -86,7 +88,7 @@ struct SettingsView: View {
                     ) {
                         // TODO: Open terms of service
                     }
-                    
+
                     SettingsRowView(
                         icon: "hand.raised",
                         iconColor: .purple,
@@ -95,7 +97,7 @@ struct SettingsView: View {
                     ) {
                         // TODO: Open privacy policy
                     }
-                    
+
                     SettingsRowView(
                         icon: "questionmark.circle",
                         iconColor: .orange,
@@ -105,7 +107,7 @@ struct SettingsView: View {
                         // TODO: Open support
                     }
                 }
-                
+
                 // About Section
                 Section("About") {
                     VStack(spacing: 16) {
@@ -119,25 +121,25 @@ struct SettingsView: View {
                                 .frame(height: 60)
                         }
                         .buttonStyle(PlainButtonStyle())
-                        
+
                         VStack(spacing: 4) {
                             Text("Shopper+")
                                 .font(.title2Roboto)
                                 .fontWeight(.bold)
-                            
+
                             Text("Version 1.0.0")
                                 .font(.bodyRoboto)
                                 .foregroundColor(.secondary)
-                            
+
                             Text("© 2025 VuWing Digital")
                                 .font(.caption1Roboto)
                                 .foregroundColor(.secondary)
-                            
+
                             Text("A division of VuWing Corp")
                                 .font(.caption1Roboto)
                                 .foregroundColor(.secondary)
                         }
-                        
+
                         Text("Intelligent price tracking and shopping optimization")
                             .font(.bodyRoboto)
                             .foregroundColor(.secondary)
@@ -147,84 +149,76 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                 }
-                
-                // Hidden Debug Section
-                if showDebugSection {
-                    Section("Debug") {
-                        SettingsRowView(
-                            icon: "ladybug.slash",
-                            iconColor: .red,
-                            title: "Debug Console",
-                            subtitle: "Test connections and view system info"
-                        ) {
-                            showingDebugView = true
-                        }
-                        
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle")
-                                .foregroundColor(.orange)
-                                .frame(width: 30)
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Developer Mode")
-                                    .font(.bodyRoboto)
-                                    .fontWeight(.medium)
-                                Text("Debug features are enabled")
-                                    .font(.caption1Roboto)
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            Button("Hide") {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    showDebugSection = false
-                                    logoTapCount = 0
-                                }
-                            }
-                            .font(.caption1Roboto)
-                            .foregroundColor(.blue)
-                        }
-                    }
-                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.large)
         }
         .preferredColorScheme(darkModeEnabled ? .dark : .light)
-        .sheet(isPresented: $showingDebugView) {
-            DebugCardView(showDebugSection: $showDebugSection)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+        .sheet(isPresented: $showingDebugConsole) {
+            DebugConsoleView(isPresented: $showingDebugConsole)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
         }
     }
-    
+
     private func logoTapped() {
         logoTapCount += 1
-        
+
         // Haptic feedback for each tap if enabled
         if hapticsEnabled {
             let impact = UIImpactFeedbackGenerator(style: .light)
             impact.impactOccurred()
         }
-        
-        // Show debug section after 7 taps
+
+        // Show debug console after 7 taps
         if logoTapCount >= 7 {
-            withAnimation(.easeInOut(duration: 0.5)) {
-                showDebugSection = true
-            }
-            
+            showingDebugConsole = true
+
             // Stronger haptic feedback when debug is unlocked
             if hapticsEnabled {
                 let impact = UIImpactFeedbackGenerator(style: .heavy)
                 impact.impactOccurred()
             }
+            
+            // Reset tap count
+            logoTapCount = 0
         }
-        
+
         // Reset counter after 10 seconds of inactivity
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
             if logoTapCount < 7 {
                 logoTapCount = 0
+            }
+        }
+    }
+}
+
+struct APIStatusRow: View {
+    @ObservedObject private var networkingService = NetworkingService.shared
+
+    var body: some View {
+        HStack {
+            Image(systemName: networkingService.isOnline ? "wifi" : "wifi.slash")
+                .foregroundColor(networkingService.isOnline ? .green : .red)
+                .frame(width: 30)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("API Status")
+                    .font(.bodyRoboto)
+                    .foregroundColor(.primary)
+                Text(networkingService.isOnline ? "Connected" : "Disconnected")
+                    .font(.caption1Roboto)
+                    .foregroundColor(networkingService.isOnline ? .green : .red)
+            }
+
+            Spacer()
+
+            if networkingService.isOnline {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+            } else {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.red)
             }
         }
     }
@@ -236,14 +230,14 @@ struct SettingsRowView: View {
     let title: String
     let subtitle: String
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             HStack {
                 Image(systemName: icon)
                     .foregroundColor(iconColor)
                     .frame(width: 30)
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.bodyRoboto)
@@ -252,9 +246,9 @@ struct SettingsRowView: View {
                         .font(.caption1Roboto)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
-                
+
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundColor(.secondary)

@@ -12,51 +12,51 @@ import UserNotifications
 
 class DebugHelpers: ObservableObject {
     static let shared = DebugHelpers()
-    
+
     private init() {}
-    
+
     // MARK: - CloudKit Testing
-    
+
     func testCloudKitConnection() async -> (success: Bool, status: String, details: String) {
         let container = CKContainer(identifier: SecretsManager.shared.cloudKitContainerID)
-        
+
         do {
             // Test account status
             let accountStatus = try await container.accountStatus()
-            
+
             switch accountStatus {
             case .available:
                 // Test database access with a simple operation that doesn't require existing record types
                 do {
                     let database = container.privateCloudDatabase
-                    
+
                     // Try to perform a simple database operation - fetch database schema info
                     // This tests connectivity without requiring specific record types to exist
                     let testRecord = CKRecord(recordType: "TestConnection")
                     testRecord["testField"] = "connectivity_test" as CKRecordValue
-                    
+
                     // We'll try to save and immediately delete a test record
                     // This tests full database write/read/delete permissions
                     let savedRecord = try await database.save(testRecord)
-                    
+
                     // Clean up the test record
                     _ = try await database.deleteRecord(withID: savedRecord.recordID)
-                    
+
                     // Get schema information
                     let schemaStatus = await CloudKitSchemaSetup.shared.getSchemaStatus()
-                    
+
                     let details = """
                     ✅ CloudKit Status: Available
                     ✅ Account: Signed in
                     ✅ Database: Accessible
                     ✅ Permissions: Read/Write/Delete confirmed
-                    
+
                     📋 Schema Status:
                     \(schemaStatus)
-                    
+
                     🔧 Container: \(SecretsManager.shared.cloudKitContainerID)
                     """
-                    
+
                     return (true, "Connected", details)
                 } catch let error as CKError {
                     let details = """
@@ -66,7 +66,7 @@ class DebugHelpers: ObservableObject {
                     🔧 Error Code: \(error.code.rawValue)
                     🔧 Container: \(SecretsManager.shared.cloudKitContainerID)
                     """
-                    
+
                     return (false, "Database Error", details)
                 } catch {
                     let details = """
@@ -75,10 +75,10 @@ class DebugHelpers: ObservableObject {
                     ❌ Database Error: \(error.localizedDescription)
                     🔧 Container: \(SecretsManager.shared.cloudKitContainerID)
                     """
-                    
+
                     return (false, "Database Error", details)
                 }
-                
+
             case .noAccount:
                 let details = """
                 ❌ CloudKit Status: No iCloud Account
@@ -86,7 +86,7 @@ class DebugHelpers: ObservableObject {
                 🔧 Container: \(SecretsManager.shared.cloudKitContainerID)
                 """
                 return (false, "No Account", details)
-                
+
             case .restricted:
                 let details = """
                 ❌ CloudKit Status: Restricted
@@ -94,7 +94,7 @@ class DebugHelpers: ObservableObject {
                 🔧 Container: \(SecretsManager.shared.cloudKitContainerID)
                 """
                 return (false, "Restricted", details)
-                
+
             case .couldNotDetermine:
                 let details = """
                 ❓ CloudKit Status: Could not determine
@@ -102,7 +102,7 @@ class DebugHelpers: ObservableObject {
                 🔧 Container: \(SecretsManager.shared.cloudKitContainerID)
                 """
                 return (false, "Unknown", details)
-                
+
             case .temporarilyUnavailable:
                 let details = """
                 ⏰ CloudKit Status: Temporarily unavailable
@@ -110,7 +110,7 @@ class DebugHelpers: ObservableObject {
                 🔧 Container: \(SecretsManager.shared.cloudKitContainerID)
                 """
                 return (false, "Unavailable", details)
-                
+
             @unknown default:
                 let details = """
                 ❓ CloudKit Status: Unknown state
@@ -127,16 +127,16 @@ class DebugHelpers: ObservableObject {
             return (false, "Connection Failed", details)
         }
     }
-    
+
     // MARK: - Notification Permissions
-    
+
     func checkNotificationPermissions() async -> (success: Bool, status: String, details: String) {
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
-        
+
         let authorizationStatus: String
         let isEnabled: Bool
-        
+
         switch settings.authorizationStatus {
         case .authorized:
             authorizationStatus = "Authorized"
@@ -157,33 +157,33 @@ class DebugHelpers: ObservableObject {
             authorizationStatus = "Unknown"
             isEnabled = false
         }
-        
+
         let alertSetting = settings.alertSetting == .enabled ? "✅ Enabled" : "❌ Disabled"
         let badgeSetting = settings.badgeSetting == .enabled ? "✅ Enabled" : "❌ Disabled"
         let soundSetting = settings.soundSetting == .enabled ? "✅ Enabled" : "❌ Disabled"
         let lockScreenSetting = settings.lockScreenSetting == .enabled ? "✅ Enabled" : "❌ Disabled"
         let notificationCenterSetting = settings.notificationCenterSetting == .enabled ? "✅ Enabled" : "❌ Disabled"
-        
+
         let details = """
         📱 Authorization Status: \(authorizationStatus)
-        
+
         🔔 Notification Settings:
         • Alerts: \(alertSetting)
         • Badges: \(badgeSetting)
         • Sounds: \(soundSetting)
         • Lock Screen: \(lockScreenSetting)
         • Notification Center: \(notificationCenterSetting)
-        
+
         💡 Critical Alerts: \(settings.criticalAlertSetting == .enabled ? "✅ Enabled" : "❌ Disabled")
         🕐 Time Sensitive: \(settings.timeSensitiveSetting == .enabled ? "✅ Enabled" : "❌ Disabled")
         📢 Announcement: \(settings.announcementSetting == .enabled ? "✅ Enabled" : "❌ Disabled")
         """
-        
+
         return (isEnabled, authorizationStatus, details)
     }
-    
+
     // MARK: - System Information
-    
+
     func getSystemInfo() -> [String: String] {
         return [
             "App Version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown",
@@ -195,9 +195,9 @@ class DebugHelpers: ObservableObject {
             "System Name": UIDevice.current.systemName
         ]
     }
-    
+
     // MARK: - User Defaults Debug
-    
+
     func getUserDefaultsInfo() -> [String: Any] {
         let userDefaults = UserDefaults.standard
         return [

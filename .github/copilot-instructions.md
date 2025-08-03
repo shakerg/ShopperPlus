@@ -1,0 +1,1 @@
+- never expose our URL, it is located in the Secrets.plist file
