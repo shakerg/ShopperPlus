@@ -23,7 +23,7 @@ spec:
         securityContext:
           runAsUser: 1000
           # allowPrivilegeEscalation: false
-        image: registry.redcloud.land/shopper-plus-backend:v1.0.2
+        image: registry.redcloud.land/shopper-plus-backend:v1.0.8
         ports:
         - containerPort: 3000
         envFrom:
@@ -131,7 +131,7 @@ spec:
         securityContext:
           runAsUser: 1000
           # allowPrivilegeEscalation: false
-        image: registry.redcloud.land/shopper-plus-backend:v1.0.2
+        image: registry.redcloud.land/shopper-plus-backend:v1.0.8
         command: ["node", "src/scrapers/worker.js"]
         envFrom:
         - configMapRef:

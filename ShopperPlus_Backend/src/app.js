@@ -4,6 +4,7 @@ if (fs.existsSync('.env')) {
   require('dotenv').config();
 }
 const express = require('express');
+const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const compression = require('compression');
@@ -32,6 +33,9 @@ app.use(cors({
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Static files for admin portal
+app.use('/static', express.static(path.join(__dirname, 'public')));
 
 // Logging
 app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));

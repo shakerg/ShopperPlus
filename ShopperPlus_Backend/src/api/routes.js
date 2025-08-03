@@ -6,6 +6,9 @@ const scraperService = require('../services/scraperService');
 const notificationService = require('../services/notificationService');
 const logger = require('../utils/logger');
 
+// Import admin routes
+const adminRoutes = require('./admin');
+
 const router = express.Router();
 
 // Validation schemas
@@ -695,5 +698,8 @@ router.post('/scrape/trigger', async (req, res, next) => {
     next(error);
   }
 });
+
+// Mount admin routes under /api/admin
+router.use('/admin', adminRoutes);
 
 module.exports = router;

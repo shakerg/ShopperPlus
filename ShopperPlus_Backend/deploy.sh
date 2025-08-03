@@ -8,6 +8,7 @@ echo "🚀 Deploying Shopper+ Backend to OpenShift/Kubernetes..."
 
 # Configuration
 NAMESPACE=${NAMESPACE:-shopper-plus}
+VERSION="v1.0.4"  # Enhanced admin dashboard with charts, graphs, and improved Amazon scraping
 REGISTRY=${REGISTRY:-your-registry.com}
 TAG=${TAG:-latest}
 

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShopperPlus Admin Portal</title>
+    <link rel="stylesheet" href="/api/admin/css/admin.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛍️</text></svg>">
+</head>
+<body>
+    <div class="app">
+        <!-- Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>🛍️ ShopperPlus</h2>
+                <p>Admin Portal</p>
+            </div>
+            
+            <ul class="nav-menu">
+                <li><a href="#dashboard" class="nav-link active" data-view="dashboard">📊 Dashboard</a></li>
+                <li><a href="#users" class="nav-link" data-view="users">👥 Users</a></li>
+                <li><a href="#products" class="nav-link" data-view="products">📦 Products</a></li>
+                <li><a href="#domains" class="nav-link" data-view="domains">🌐 Domains</a></li>
+                <li><a href="#scraping" class="nav-link" data-view="scraping">🤖 Scraping</a></li>
+                <li><a href="#analytics" class="nav-link" data-view="analytics">📈 Analytics</a></li>
+                <li><a href="#system" class="nav-link" data-view="system">⚙️ System</a></li>
+            </ul>
+            
+            <div class="sidebar-footer">
+                <button id="refresh-all" class="btn btn-primary">🔄 Refresh Data</button>
+                <p class="version">v1.0.3</p>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="header">
+                <h1 id="page-title">Dashboard</h1>
+                <div class="header-actions">
+                    <span id="last-updated" class="last-updated"></span>
+                    <button id="export-data" class="btn btn-secondary">📄 Export</button>
+                </div>
+            </header>
+
+            <!-- Content Views -->
+            <div id="content" class="content">
+                <!-- Dashboard View -->
+                <div id="dashboard-view" class="view active">
+                    <div class="loading-container">
+                        <div class="loading-spinner"></div>
+                        <p>Loading dashboard data...</p>
+                    </div>
+                </div>
+
+                <!-- Users View -->
+                <div id="users-view" class="view">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3>Total Users</h3>
+                            <div class="stat-value" id="total-users">-</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Active Users (7d)</h3>
+                            <div class="stat-value" id="active-users">-</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>New Users (30d)</h3>
+                            <div class="stat-value" id="new-users">-</div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="users-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Products View -->
+                <div id="products-view" class="view">
+                    <div class="view-header">
+                        <h2>Product Analytics</h2>
+                        <div class="filters">
+                            <select id="product-filter">
+                                <option value="all">All Products</option>
+                                <option value="with-price">With Price</option>
+                                <option value="with-image">With Image</option>
+                                <option value="recent">Recently Checked</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="products-grid" class="data-grid"></div>
+                </div>
+
+                <!-- Domains View -->
+                <div id="domains-view" class="view">
+                    <div class="view-header">
+                        <h2>Domain Distribution</h2>
+                    </div>
+                    <div id="domains-chart-container" class="chart-container">
+                        <canvas id="domains-chart"></canvas>
+                    </div>
+                    <div id="domains-table" class="data-table"></div>
+                </div>
+
+                <!-- Scraping View -->
+                <div id="scraping-view" class="view">
+                    <div class="scraping-controls">
+                        <button id="trigger-scrape" class="btn btn-primary">🚀 Trigger Scrape</button>
+                        <button id="clear-failed" class="btn btn-danger">🗑️ Clear Failed</button>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-card success">
+                            <h3>Success Rate</h3>
+                            <div class="stat-value" id="success-rate">-</div>
+                        </div>
+                        <div class="stat-card warning">
+                            <h3>Pending Jobs</h3>
+                            <div class="stat-value" id="pending-jobs">-</div>
+                        </div>
+                        <div class="stat-card danger">
+                            <h3>Failed Jobs</h3>
+                            <div class="stat-value" id="failed-jobs">-</div>
+                        </div>
+                    </div>
+                    <div id="scraping-log" class="log-container"></div>
+                </div>
+
+                <!-- Analytics View -->
+                <div id="analytics-view" class="view">
+                    <div class="analytics-dashboard">
+                        <div class="chart-row">
+                            <div class="chart-container">
+                                <h3>User Growth</h3>
+                                <canvas id="growth-chart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <h3>Popular Domains</h3>
+                                <canvas id="popularity-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-row">
+                            <div class="chart-container">
+                                <h3>Price Trends</h3>
+                                <canvas id="price-chart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <h3>Activity Heatmap</h3>
+                                <canvas id="activity-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System View -->
+                <div id="system-view" class="view">
+                    <div class="system-info">
+                        <div class="info-card">
+                            <h3>🐳 Containers</h3>
+                            <div class="status-grid">
+                                <div class="status-item">
+                                    <span>Backend (3 replicas)</span>
+                                    <span class="status healthy">●</span>
+                                </div>
+                                <div class="status-item">
+                                    <span>Scraper (2 replicas)</span>
+                                    <span class="status healthy">●</span>
+                                </div>
+                                <div class="status-item">
+                                    <span>PostgreSQL</span>
+                                    <span class="status healthy">●</span>
+                                </div>
+                                <div class="status-item">
+                                    <span>Memcached</span>
+                                    <span class="status healthy">●</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <h3>📊 Performance</h3>
+                            <div id="performance-metrics"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/api/admin/js/chart.min.js"></script>
+    <script src="/api/admin/js/admin.js"></script>
+    <script>
+        // Initialize the admin portal
+        document.addEventListener('DOMContentLoaded', function() {
+            window.adminPortal = new AdminPortal();
+        });
+    </script>
+</body>
+</html>
