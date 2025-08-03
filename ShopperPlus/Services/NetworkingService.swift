@@ -192,15 +192,17 @@ class NetworkingService: ObservableObject {
         }
         
         // Function to end background task
-        @MainActor func endBackgroundTask() {
-            if taskID != .invalid {
-                print("🧹 Ending product info fetch background task")
-                UIApplication.shared.endBackgroundTask(taskID)
+        func endBackgroundTask() {
+            Task { @MainActor in
+                if taskID != .invalid {
+                    print("🧹 Ending product info fetch background task")
+                    UIApplication.shared.endBackgroundTask(taskID)
+                }
             }
         }
         
         guard let requestURL = URL(string: "\(baseURL)/products/info") else {
-            await endBackgroundTask()
+            endBackgroundTask()
             throw NetworkingError.invalidURL
         }
 
@@ -212,7 +214,7 @@ class NetworkingService: ObservableObject {
         do {
             request.httpBody = try JSONEncoder().encode(requestBody)
         } catch {
-            await endBackgroundTask()
+            endBackgroundTask()
             throw NetworkingError.general("Failed to encode request")
         }
 
@@ -265,11 +267,11 @@ class NetworkingService: ObservableObject {
         }
         
         let result = try decoder.decode(ProductInfo.self, from: data)
-        await endBackgroundTask()
+        endBackgroundTask()
         return result
         
         } catch {
-            await endBackgroundTask()
+            endBackgroundTask()
             print("❌ Product info fetch failed: \(error)")
             
             // Handle specific timeout errors
