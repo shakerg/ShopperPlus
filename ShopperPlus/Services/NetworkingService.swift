@@ -191,16 +191,16 @@ class NetworkingService: ObservableObject {
             }
         }
         
-        defer {
-            Task { @MainActor in
-                if taskID != .invalid {
-                    print("🧹 Ending product info fetch background task")
-                    UIApplication.shared.endBackgroundTask(taskID)
-                }
+        // Function to end background task
+        @MainActor func endBackgroundTask() {
+            if taskID != .invalid {
+                print("🧹 Ending product info fetch background task")
+                UIApplication.shared.endBackgroundTask(taskID)
             }
         }
         
         guard let requestURL = URL(string: "\(baseURL)/products/info") else {
+            await endBackgroundTask()
             throw NetworkingError.invalidURL
         }
 
@@ -209,7 +209,12 @@ class NetworkingService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let requestBody = ["url": url]
-        request.httpBody = try JSONEncoder().encode(requestBody)
+        do {
+            request.httpBody = try JSONEncoder().encode(requestBody)
+        } catch {
+            await endBackgroundTask()
+            throw NetworkingError.general("Failed to encode request")
+        }
 
         do {
             let (data, response) = try await session.data(for: request)
@@ -259,9 +264,12 @@ class NetworkingService: ObservableObject {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date string \(dateString)")
         }
         
-        return try decoder.decode(ProductInfo.self, from: data)
+        let result = try decoder.decode(ProductInfo.self, from: data)
+        await endBackgroundTask()
+        return result
         
         } catch {
+            await endBackgroundTask()
             print("❌ Product info fetch failed: \(error)")
             
             // Handle specific timeout errors
