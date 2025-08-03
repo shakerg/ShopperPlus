@@ -117,8 +117,21 @@ class ShopperPlusViewModel: ObservableObject {
                 error = nil
 
             } catch {
-                if error is NetworkingError {
-                    self.error = .networkError(error.localizedDescription)
+                print("❌ Failed to add item from URL: \(url), Error: \(error)")
+                
+                if let networkingError = error as? NetworkingError {
+                    switch networkingError {
+                    case .timeout:
+                        self.error = .networkError("Amazon URLs can take 1-2 minutes to process. Please keep the app open and try again.")
+                    case .connectionLost:
+                        self.error = .networkError("Connection lost. Please check your internet and try again.")
+                    case .noInternet:
+                        self.error = .networkError("No internet connection. Please check your network settings.")
+                    case .serverError(let code) where code >= 500:
+                        self.error = .networkError("Server is temporarily unavailable. Please try again in a few minutes.")
+                    default:
+                        self.error = .networkError(networkingError.localizedDescription)
+                    }
                 } else {
                     self.error = .general(error.localizedDescription)
                 }

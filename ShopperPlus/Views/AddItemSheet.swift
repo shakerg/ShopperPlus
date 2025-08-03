@@ -64,6 +64,25 @@ struct AddItemSheet: View {
                         }
                         .padding(.top, 4)
                     }
+                    
+                    // Information about processing times
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "info.circle")
+                                .foregroundColor(.blue)
+                                .font(.caption)
+                            Text("Processing Time")
+                                .font(.caption1Roboto)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
+                        }
+                        
+                        Text("Amazon URLs may take 1-2 minutes to process. Please keep the app open during this time.")
+                            .font(.caption1Roboto)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.top, 6)
                 }
 
                 // Supported Stores

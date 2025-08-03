@@ -26,10 +26,10 @@ class NetworkingService: ObservableObject {
     private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
 
     private init() {
-        // Configure URLSession with proper settings to prevent connection issues
+        // Configure URLSession with proper settings for product scraping operations
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 15.0
-        config.timeoutIntervalForResource = 30.0
+        config.timeoutIntervalForRequest = 45.0 // Increased for scraping operations
+        config.timeoutIntervalForResource = 120.0 // Allow up to 2 minutes for complex scraping
         config.waitsForConnectivity = false
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
 
@@ -82,13 +82,31 @@ class NetworkingService: ObservableObject {
     private func handleAppBackgrounding() {
         // Start a background task to safely complete any ongoing network operations
         Task { @MainActor in
+            // End any existing background task first
+            if backgroundTaskID != .invalid {
+                UIApplication.shared.endBackgroundTask(backgroundTaskID)
+            }
+            
             backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "NetworkCleanup") { [weak self] in
                 // This block is called when the background time is about to expire
-                if let taskID = self?.backgroundTaskID, taskID != .invalid {
+                print("⚠️ Background task expiring, cleaning up network operations")
+                if let self = self, self.backgroundTaskID != .invalid {
                     Task { @MainActor in
-                        UIApplication.shared.endBackgroundTask(taskID)
+                        UIApplication.shared.endBackgroundTask(self.backgroundTaskID)
+                        self.backgroundTaskID = .invalid
                     }
-                    self?.backgroundTaskID = .invalid
+                }
+            }
+            
+            // Set a timer to auto-cleanup the background task after a reasonable time
+            Task {
+                try? await Task.sleep(for: .seconds(150)) // 2.5 minutes
+                await MainActor.run {
+                    if self.backgroundTaskID != .invalid {
+                        print("🧹 Auto-cleaning up background task after timeout")
+                        UIApplication.shared.endBackgroundTask(self.backgroundTaskID)
+                        self.backgroundTaskID = .invalid
+                    }
                 }
             }
         }
@@ -164,6 +182,24 @@ class NetworkingService: ObservableObject {
     // MARK: - Product Information
 
     func fetchProductInfo(from url: String) async throws -> ProductInfo {
+        print("🌐 Starting product info fetch for: \(url)")
+        
+        // Start a background task for this specific operation
+        let taskID = await MainActor.run {
+            UIApplication.shared.beginBackgroundTask(withName: "ProductInfoFetch") {
+                print("⚠️ Product info fetch background task expiring")
+            }
+        }
+        
+        defer {
+            Task { @MainActor in
+                if taskID != .invalid {
+                    print("🧹 Ending product info fetch background task")
+                    UIApplication.shared.endBackgroundTask(taskID)
+                }
+            }
+        }
+        
         guard let requestURL = URL(string: "\(baseURL)/products/info") else {
             throw NetworkingError.invalidURL
         }
@@ -175,29 +211,36 @@ class NetworkingService: ObservableObject {
         let requestBody = ["url": url]
         request.httpBody = try JSONEncoder().encode(requestBody)
 
-        let (data, response) = try await session.data(for: request)
+        do {
+            let (data, response) = try await session.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NetworkingError.invalidResponse
-        }
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NetworkingError.invalidResponse
+            }
 
-        guard httpResponse.statusCode == 200 else {
-            throw NetworkingError.serverError(httpResponse.statusCode)
-        }
+            guard httpResponse.statusCode == 200 else {
+                // Log the response for debugging
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("❌ Server error \(httpResponse.statusCode): \(responseString)")
+                }
+                throw NetworkingError.serverError(httpResponse.statusCode)
+            }
 
-        let decoder = JSONDecoder()
-        
-        // Create a flexible date decoding strategy to handle various ISO 8601 formats
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateString = try container.decode(String.self)
+            print("✅ Product info fetch completed successfully")
             
-            // Try different ISO 8601 formats
-            let formats = [
+            let decoder = JSONDecoder()
+            
+            // Create a flexible date decoding strategy to handle various ISO 8601 formats
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let dateString = try container.decode(String.self)
+                
+                // Try different ISO 8601 formats
+                let formats = [
                 "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",  // With microseconds
                 "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",     // With milliseconds
                 "yyyy-MM-dd'T'HH:mm:ss'Z'",         // Without fractional seconds
@@ -217,6 +260,29 @@ class NetworkingService: ObservableObject {
         }
         
         return try decoder.decode(ProductInfo.self, from: data)
+        
+        } catch {
+            print("❌ Product info fetch failed: \(error)")
+            
+            // Handle specific timeout errors
+            if let urlError = error as? URLError {
+                switch urlError.code {
+                case .timedOut:
+                    print("⏰ Request timed out - Amazon scraping may be taking longer than expected")
+                    throw NetworkingError.timeout
+                case .networkConnectionLost:
+                    print("📡 Network connection lost during request")
+                    throw NetworkingError.connectionLost
+                case .notConnectedToInternet:
+                    print("🌐 No internet connection")
+                    throw NetworkingError.noInternet
+                default:
+                    throw NetworkingError.general(urlError.localizedDescription)
+                }
+            }
+            
+            throw error
+        }
     }
 
     // MARK: - Price Checking
@@ -472,6 +538,10 @@ enum NetworkingError: LocalizedError {
     case noData
     case decodingError(Error)
     case networkUnavailable
+    case timeout
+    case connectionLost
+    case noInternet
+    case general(String)
 
     var errorDescription: String? {
         switch self {
@@ -489,6 +559,14 @@ enum NetworkingError: LocalizedError {
             return "Failed to decode response: \(error.localizedDescription)"
         case .networkUnavailable:
             return "Network connection is unavailable."
+        case .timeout:
+            return "Request timed out. Amazon URLs may take longer to process."
+        case .connectionLost:
+            return "Network connection was lost during the request."
+        case .noInternet:
+            return "No internet connection available."
+        case .general(let message):
+            return message
         }
     }
 }

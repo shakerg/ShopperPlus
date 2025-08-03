@@ -69,7 +69,7 @@ struct SettingsView: View {
                 // Support Section
                 Section("Support & Information") {
                     // API Status (always visible)
-                    APIStatusRow()
+                    // APIStatusRow()
 
                     SettingsRowView(
                         icon: "doc.text",
