@@ -176,7 +176,7 @@ struct SettingsView: View {
                 let impact = UIImpactFeedbackGenerator(style: .heavy)
                 impact.impactOccurred()
             }
-            
+
             // Reset tap count
             logoTapCount = 0
         }

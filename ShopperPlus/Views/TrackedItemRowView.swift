@@ -10,6 +10,14 @@ import SwiftUI
 struct TrackedItemRowView: View {
     let item: TrackedItem
 
+    // Computed property to detect if item is in loading state
+    private var isLoadingItem: Bool {
+        guard let title = item.title else { return false }
+        return title.hasPrefix("Loading") ||
+               title.hasPrefix("Retrying") ||
+               title.hasPrefix("Failed to load")
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // Product Image
@@ -30,14 +38,27 @@ struct TrackedItemRowView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
             VStack(alignment: .leading, spacing: 4) {
-                // Product Title
-                Text(item.title ?? "Untitled Item")
-                    .font(.headlineRoboto)
-                    .lineLimit(2)
-                    .foregroundColor(.primary)
+                // Product Title with loading indicator
+                HStack {
+                    Text(item.title ?? "Untitled Item")
+                        .font(.headlineRoboto)
+                        .lineLimit(2)
+                        .foregroundColor(.primary)
+
+                    // Show loading indicator for placeholder items
+                    if isLoadingItem {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                            .frame(width: 16, height: 16)
+                    }
+                }
 
                 // Current Price
-                if item.currentPrice > 0 {
+                if isLoadingItem {
+                    Text("Loading price...")
+                        .font(.bodyRoboto)
+                        .foregroundColor(.secondary)
+                } else if item.currentPrice > 0 {
                     Text(formatPrice(item.currentPrice, currency: item.currency ?? "USD"))
                         .font(.title3Roboto)
                         .foregroundColor(.green)
@@ -47,8 +68,12 @@ struct TrackedItemRowView: View {
                         .foregroundColor(.secondary)
                 }
 
-                // Price Change Indicator
-                if let priceChange = calculatePriceChange() {
+                // Price Change Indicator or Loading Status
+                if isLoadingItem {
+                    Text("Fetching product info...")
+                        .font(.caption1Roboto)
+                        .foregroundColor(.orange)
+                } else if let priceChange = calculatePriceChange() {
                     HStack(spacing: 4) {
                         Image(systemName: priceChange.isPositive ? "arrow.up" : "arrow.down")
                             .font(.caption1Roboto)

@@ -684,7 +684,7 @@ extension APITestService {
 
         return maskedText
     }
-    
+
     // Public method for masking sensitive information in UI
     func maskSensitiveInfo(_ text: String) -> String {
         return maskSensitiveData(text)

@@ -86,7 +86,7 @@ class NetworkingService: ObservableObject {
             if backgroundTaskID != .invalid {
                 UIApplication.shared.endBackgroundTask(backgroundTaskID)
             }
-            
+
             backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "NetworkCleanup") { [weak self] in
                 // This block is called when the background time is about to expire
                 print("⚠️ Background task expiring, cleaning up network operations")
@@ -97,7 +97,7 @@ class NetworkingService: ObservableObject {
                     }
                 }
             }
-            
+
             // Set a timer to auto-cleanup the background task after a reasonable time
             Task {
                 try? await Task.sleep(for: .seconds(150)) // 2.5 minutes
@@ -183,14 +183,14 @@ class NetworkingService: ObservableObject {
 
     func fetchProductInfo(from url: String) async throws -> ProductInfo {
         print("🌐 Starting product info fetch for: \(url)")
-        
+
         // Start a background task for this specific operation
         let taskID = await MainActor.run {
             UIApplication.shared.beginBackgroundTask(withName: "ProductInfoFetch") {
                 print("⚠️ Product info fetch background task expiring")
             }
         }
-        
+
         // Function to end background task
         func endBackgroundTask() {
             Task { @MainActor in
@@ -200,7 +200,7 @@ class NetworkingService: ObservableObject {
                 }
             }
         }
-        
+
         guard let requestURL = URL(string: "\(baseURL)/products/info") else {
             endBackgroundTask()
             throw NetworkingError.invalidURL
@@ -234,18 +234,18 @@ class NetworkingService: ObservableObject {
             }
 
             print("✅ Product info fetch completed successfully")
-            
+
             let decoder = JSONDecoder()
-            
+
             // Create a flexible date decoding strategy to handle various ISO 8601 formats
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "en_US_POSIX")
             formatter.timeZone = TimeZone(secondsFromGMT: 0)
-            
+
             decoder.dateDecodingStrategy = .custom { decoder in
                 let container = try decoder.singleValueContainer()
                 let dateString = try container.decode(String.self)
-                
+
                 // Try different ISO 8601 formats
                 let formats = [
                 "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",  // With microseconds
@@ -254,26 +254,26 @@ class NetworkingService: ObservableObject {
                 "yyyy-MM-dd'T'HH:mm:ssZ",           // Alternative format
                 "yyyy-MM-dd'T'HH:mm:ss.SSSZ"       // With milliseconds no Z
             ]
-            
+
             for format in formats {
                 formatter.dateFormat = format
                 if let date = formatter.date(from: dateString) {
                     return date
                 }
             }
-            
+
             // If all formats fail, throw an error
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date string \(dateString)")
         }
-        
+
         let result = try decoder.decode(ProductInfo.self, from: data)
         endBackgroundTask()
         return result
-        
+
         } catch {
             endBackgroundTask()
             print("❌ Product info fetch failed: \(error)")
-            
+
             // Handle specific timeout errors
             if let urlError = error as? URLError {
                 switch urlError.code {
@@ -290,7 +290,7 @@ class NetworkingService: ObservableObject {
                     throw NetworkingError.general(urlError.localizedDescription)
                 }
             }
-            
+
             throw error
         }
     }
@@ -320,16 +320,16 @@ class NetworkingService: ObservableObject {
         }
 
         let decoder = JSONDecoder()
-        
+
         // Create a flexible date decoding strategy to handle various ISO 8601 formats
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        
+
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateString = try container.decode(String.self)
-            
+
             // Try different ISO 8601 formats
             let formats = [
                 "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",  // With microseconds
@@ -338,18 +338,18 @@ class NetworkingService: ObservableObject {
                 "yyyy-MM-dd'T'HH:mm:ssZ",           // Alternative format
                 "yyyy-MM-dd'T'HH:mm:ss.SSSZ"       // With milliseconds no Z
             ]
-            
+
             for format in formats {
                 formatter.dateFormat = format
                 if let date = formatter.date(from: dateString) {
                     return date
                 }
             }
-            
+
             // If all formats fail, throw an error
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date string \(dateString)")
         }
-        
+
         return try decoder.decode(PriceCheckResponse.self, from: data)
     }
 
@@ -385,16 +385,16 @@ class NetworkingService: ObservableObject {
         }
 
         let decoder = JSONDecoder()
-        
+
         // Create a flexible date decoding strategy to handle various ISO 8601 formats
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        
+
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateString = try container.decode(String.self)
-            
+
             // Try different ISO 8601 formats
             let formats = [
                 "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",  // With microseconds
@@ -403,18 +403,18 @@ class NetworkingService: ObservableObject {
                 "yyyy-MM-dd'T'HH:mm:ssZ",           // Alternative format
                 "yyyy-MM-dd'T'HH:mm:ss.SSSZ"       // With milliseconds no Z
             ]
-            
+
             for format in formats {
                 formatter.dateFormat = format
                 if let date = formatter.date(from: dateString) {
                     return date
                 }
             }
-            
+
             // If all formats fail, throw an error
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date string \(dateString)")
         }
-        
+
         let syncResponse = try decoder.decode(SyncResponse.self, from: data)
         return syncResponse.updates
     }

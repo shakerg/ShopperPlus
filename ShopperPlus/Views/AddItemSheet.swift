@@ -64,20 +64,20 @@ struct AddItemSheet: View {
                         }
                         .padding(.top, 4)
                     }
-                    
+
                     // Information about processing times
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
-                            Image(systemName: "info.circle")
-                                .foregroundColor(.blue)
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
                                 .font(.caption)
-                            Text("Processing Time")
+                            Text("Instant Add")
                                 .font(.caption1Roboto)
                                 .fontWeight(.medium)
                                 .foregroundColor(.primary)
                         }
-                        
-                        Text("Amazon URLs may take 1-2 minutes to process. Please keep the app open during this time.")
+
+                        Text("Items are added instantly to your list. Product details will load in the background.")
                             .font(.caption1Roboto)
                             .foregroundColor(.secondary)
                             .fixedSize(horizontal: false, vertical: true)

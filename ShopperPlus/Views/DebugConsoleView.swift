@@ -12,7 +12,7 @@ struct DebugConsoleView: View {
     @StateObject private var apiTestService = APITestService.shared
     @StateObject private var debugHelpers = DebugHelpers.shared
     @StateObject private var networkingService = NetworkingService.shared
-    
+
     @State private var showingDetailSheet = false
     @State private var selectedResult: APITestService.APITestResult?
 
@@ -21,13 +21,13 @@ struct DebugConsoleView: View {
             VStack(spacing: 0) {
                 // Header
                 headerSection
-                
+
                 // Content - single scrollable view
                 ScrollView {
                     VStack(spacing: 20) {
                         // API Tests Section
                         apiTestsSection
-                        
+
                         // System Info Section  
                         systemInfoSection
                     }
@@ -52,17 +52,17 @@ struct DebugConsoleView: View {
         }
         .background(Color(.systemBackground))
     }
-    
+
     private var headerSection: some View {
         VStack(spacing: 12) {
             Image(systemName: "ladybug.slash.circle.fill")
                 .font(.system(size: 40))
                 .foregroundColor(.red)
-            
+
             Text("Developer Debug Console")
                 .font(.title3Roboto)
                 .fontWeight(.semibold)
-            
+
             Text("Test API endpoints and view system information")
                 .font(.caption1Roboto)
                 .foregroundColor(.secondary)
@@ -71,7 +71,7 @@ struct DebugConsoleView: View {
         .padding()
         .background(Color.clear)
     }
-    
+
     private var apiTestsSection: some View {
         VStack(spacing: 16) {
             // Overall API Status
@@ -79,23 +79,23 @@ struct DebugConsoleView: View {
                 Image(systemName: overallStatusIcon)
                     .font(.title2)
                     .foregroundColor(overallStatusColor)
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text("API Status")
                         .font(.headlineRoboto)
                         .fontWeight(.semibold)
-                    
+
                     Text(overallStatusText)
                         .font(.bodyRoboto)
                         .foregroundColor(overallStatusColor)
                 }
-                
+
                 Spacer()
             }
             .padding()
             .background(Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 12))
-            
+
             // Full Width API Test Button
             Button(action: {
                 Task {
@@ -111,13 +111,13 @@ struct DebugConsoleView: View {
                         Image(systemName: "network.badge.shield.half.filled")
                             .font(.title3)
                     }
-                    
+
                     Text(apiTestService.isRunningTests ? "Running API Tests..." : "Run API Tests")
                         .font(.bodyRoboto)
                         .fontWeight(.semibold)
-                    
+
                     Spacer()
-                    
+
                     if !apiTestService.testResults.isEmpty && !apiTestService.isRunningTests {
                         Text("\(apiTestService.testResults.count) tests")
                             .font(.caption1Roboto)
@@ -132,7 +132,7 @@ struct DebugConsoleView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .disabled(apiTestService.isRunningTests)
-            
+
             // Test Results (if any)
             if !apiTestService.testResults.isEmpty {
                 VStack(spacing: 8) {
@@ -145,7 +145,7 @@ struct DebugConsoleView: View {
                             .font(.caption1Roboto)
                             .foregroundColor(.secondary)
                     }
-                    
+
                     LazyVStack(spacing: 6) {
                         ForEach(apiTestService.testResults, id: \.testName) { result in
                             APITestRowView(result: result) {
@@ -157,7 +157,7 @@ struct DebugConsoleView: View {
             }
         }
     }
-    
+
     private var systemInfoSection: some View {
         VStack(spacing: 16) {
             HStack {
@@ -168,7 +168,7 @@ struct DebugConsoleView: View {
                     .fontWeight(.semibold)
                 Spacer()
             }
-            
+
             VStack(spacing: 12) {
                 // Network Status
                 systemInfoCard(
@@ -181,7 +181,7 @@ struct DebugConsoleView: View {
                         ("Environment", "Production")
                     ]
                 )
-                
+
                 // Device Info
                 systemInfoCard(
                     title: "Device Information",
@@ -194,7 +194,7 @@ struct DebugConsoleView: View {
                         ("Build", Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown")
                     ]
                 )
-                
+
                 // Debug Settings
                 systemInfoCard(
                     title: "Debug Settings",
@@ -206,10 +206,13 @@ struct DebugConsoleView: View {
                         ("Test Mode", "Active")
                     ]
                 )
+
+                // CloudKit Status
+                CloudKitStatusCard()
             }
         }
     }
-    
+
     private func systemInfoCard(title: String, icon: String, iconColor: Color, items: [(String, String)]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -219,7 +222,7 @@ struct DebugConsoleView: View {
                     .font(.headlineRoboto)
                     .fontWeight(.semibold)
             }
-            
+
             VStack(spacing: 8) {
                 ForEach(items, id: \.0) { item in
                     HStack {
@@ -238,9 +241,9 @@ struct DebugConsoleView: View {
         .background(Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
-    
+
     // MARK: - API Status Helpers
-    
+
     private var overallStatusIcon: String {
         switch apiTestService.overallStatus {
         case .passed: return "checkmark.circle.fill"
@@ -250,7 +253,7 @@ struct DebugConsoleView: View {
         case .unknown: return "questionmark.circle"
         }
     }
-    
+
     private var overallStatusColor: Color {
         switch apiTestService.overallStatus {
         case .passed: return .green
@@ -260,7 +263,7 @@ struct DebugConsoleView: View {
         case .unknown: return .gray
         }
     }
-    
+
     private var overallStatusText: String {
         switch apiTestService.overallStatus {
         case .passed: return "All tests passed"
@@ -275,7 +278,7 @@ struct DebugConsoleView: View {
 struct APITestRowView: View {
     let result: APITestService.APITestResult
     let onTap: () -> Void
-    
+
     var body: some View {
         Button(action: onTap) {
             HStack {
@@ -284,28 +287,28 @@ struct APITestRowView: View {
                     .font(.title3)
                     .foregroundColor(statusColor)
                     .frame(width: 30)
-                
+
                 // Test Info
                 VStack(alignment: .leading, spacing: 2) {
                     Text(result.testName)
                         .font(.bodyRoboto)
                         .fontWeight(.medium)
                         .foregroundColor(.primary)
-                    
+
                     Text(result.endpoint)
                         .font(.caption1Roboto)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
-                
+
                 // Response Time
                 if let responseTime = result.responseTime {
                     Text("\(Int(responseTime * 1000))ms")
                         .font(.caption1Roboto)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -316,7 +319,7 @@ struct APITestRowView: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-    
+
     private var statusIcon: String {
         switch result.status {
         case .passed: return "checkmark.circle.fill"
@@ -326,7 +329,7 @@ struct APITestRowView: View {
         case .unknown: return "questionmark.circle"
         }
     }
-    
+
     private var statusColor: Color {
         switch result.status {
         case .passed: return .green
@@ -334,6 +337,120 @@ struct APITestRowView: View {
         case .warning: return .orange
         case .running: return .blue
         case .unknown: return .gray
+        }
+    }
+}
+
+// MARK: - CloudKit Status Card
+
+struct CloudKitStatusCard: View {
+    @StateObject private var cloudKitManager = CloudKitManager.shared
+    @StateObject private var debugHelpers = DebugHelpers.shared
+    
+    @State private var containerStatus: String = "Unknown"
+    @State private var accountStatus: String = "Unknown"
+    @State private var syncStatus: String = "Unknown"
+    @State private var isLoading = false
+    @State private var lastUpdated: Date?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "icloud.fill")
+                    .foregroundColor(.blue)
+                Text("CloudKit Status")
+                    .font(.headlineRoboto)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                } else {
+                    Button("Refresh") {
+                        refreshStatus()
+                    }
+                    .font(.caption1Roboto)
+                    .foregroundColor(.blue)
+                }
+            }
+
+            VStack(spacing: 8) {
+                cloudKitRow("Container", containerStatus)
+                cloudKitRow("iCloud Account", accountStatus)
+                cloudKitRow("Sync Status", syncStatus)
+                cloudKitRow("Container ID", SecretsManager.shared.cloudKitContainerID)
+                
+                if let lastUpdated = lastUpdated {
+                    cloudKitRow("Last Checked", DateFormatter.localizedString(from: lastUpdated, dateStyle: .none, timeStyle: .medium))
+                }
+            }
+        }
+        .padding()
+        .background(Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .onAppear {
+            refreshStatus()
+        }
+    }
+    
+    private func cloudKitRow(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.bodyRoboto)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(value)
+                .font(.bodyRoboto)
+                .fontWeight(.medium)
+                .foregroundColor(getStatusColor(for: value))
+        }
+    }
+    
+    private func getStatusColor(for status: String) -> Color {
+        if status.contains("✅") || status.contains("Connected") || status.contains("Available") || status.contains("Success") {
+            return .green
+        } else if status.contains("❌") || status.contains("Failed") || status.contains("No Account") || status.contains("Restricted") {
+            return .red
+        } else if status.contains("⚠️") || status.contains("Warning") || status.contains("Syncing") {
+            return .orange
+        } else {
+            return .primary
+        }
+    }
+    
+    private func refreshStatus() {
+        isLoading = true
+        
+        Task {
+            let result = await debugHelpers.testCloudKitConnection()
+            
+            await MainActor.run {
+                // Parse the results
+                if result.success {
+                    containerStatus = "✅ Available"
+                    accountStatus = "✅ Signed In"
+                } else {
+                    containerStatus = "❌ \(result.status)"
+                    accountStatus = result.details.contains("No Account") ? "❌ Not Signed In" : "❓ \(result.status)"
+                }
+                
+                // Sync status from CloudKitManager
+                switch cloudKitManager.syncStatus {
+                case .idle:
+                    syncStatus = "⏸ Idle"
+                case .syncing:
+                    syncStatus = "🔄 Syncing"
+                case .success:
+                    syncStatus = "✅ Success"
+                case .failed(let error):
+                    syncStatus = "❌ Failed: \(error.localizedDescription)"
+                }
+                
+                lastUpdated = Date()
+                isLoading = false
+            }
         }
     }
 }

@@ -80,22 +80,62 @@ class ShopperPlusViewModel: ObservableObject {
             return
         }
 
+        // Extract domain for initial title
+        let domain = extractDomain(from: url)
+
+        // Step 1: Create and store item immediately with placeholder data
+        let newItem = TrackedItem(
+            context: viewContext,
+            title: "Loading \(domain)...",
+            url: url,
+            imageUrl: nil,
+            currentPrice: nil,
+            currency: "USD",
+            targetPrice: nil,
+            isActive: true
+        )
+
+        // Step 2: Save immediately to CloudKit and update UI
         Task {
             do {
-                isLoading = true
+                // Save to CloudKit immediately
+                try await cloudKitManager.saveTrackedItem(newItem)
 
-                // Fetch product info from backend
+                // Update local array and close sheet immediately
+                trackedItems.append(newItem)
+                showingAddItemSheet = false
+                error = nil
+
+                print("✅ Item stored immediately, starting background fetch...")
+
+                // Step 3: Start background fetch without blocking UI
+                fetchProductInfoInBackground(for: newItem, url: url)
+
+            } catch {
+                print("❌ Failed to save item immediately: \(error)")
+                // Remove the item from local array if CloudKit save failed
+                if let index = trackedItems.firstIndex(where: { $0.id == newItem.id }) {
+                    trackedItems.remove(at: index)
+                }
+                self.error = .cloudKitError(error.localizedDescription)
+            }
+        }
+    }
+
+    private func fetchProductInfoInBackground(for item: TrackedItem, url: String) {
+        Task {
+            do {
+                print("🔄 Background fetch starting for: \(url)")
+
+                // Fetch product info from backend in background
                 let productInfo = try await networkingService.fetchProductInfo(from: url)
 
-                // Create new tracked item
-                let newItem = TrackedItem(
-                    context: viewContext,
-                    title: productInfo.title,
-                    url: url,
-                    imageUrl: productInfo.imageUrl,
-                    currentPrice: productInfo.price,
-                    currency: productInfo.currency
-                )
+                // Update the existing item with real data
+                item.title = productInfo.title
+                item.imageUrl = productInfo.imageUrl
+                item.currentPrice = productInfo.price ?? 0.0
+                item.currency = productInfo.currency
+                item.lastUpdated = productInfo.lastUpdated
 
                 // Add initial price entry if available
                 if let price = productInfo.price {
@@ -105,39 +145,45 @@ class ShopperPlusViewModel: ObservableObject {
                         timestamp: productInfo.lastUpdated,
                         source: .backend
                     )
-                    newItem.priceHistory = [priceEntry]
+                    item.priceHistory = [priceEntry]
                 }
 
-                // Save to CloudKit
-                try await cloudKitManager.saveTrackedItem(newItem)
+                // Save updated item to CloudKit
+                try await cloudKitManager.saveTrackedItem(item)
 
-                // Update local array
-                trackedItems.append(newItem)
-                showingAddItemSheet = false
-                error = nil
+                print("✅ Background fetch completed for: \(productInfo.title)")
 
             } catch {
-                print("❌ Failed to add item from URL: \(url), Error: \(error)")
-                
-                if let networkingError = error as? NetworkingError {
-                    switch networkingError {
-                    case .timeout:
-                        self.error = .networkError("Amazon URLs can take 1-2 minutes to process. Please keep the app open and try again.")
-                    case .connectionLost:
-                        self.error = .networkError("Connection lost. Please check your internet and try again.")
-                    case .noInternet:
-                        self.error = .networkError("No internet connection. Please check your network settings.")
-                    case .serverError(let code) where code >= 500:
-                        self.error = .networkError("Server is temporarily unavailable. Please try again in a few minutes.")
-                    default:
-                        self.error = .networkError(networkingError.localizedDescription)
-                    }
-                } else {
-                    self.error = .general(error.localizedDescription)
-                }
+                print("⚠️ Background fetch failed for: \(url), Error: \(error)")
+
+                // Update item to show fetch failed
+                item.title = "Failed to load \(extractDomain(from: url))"
+
+                // Try to save the error state
+                try? await cloudKitManager.saveTrackedItem(item)
+
+                // Don't show error to user since item is already added
+                // User can manually refresh later if needed
             }
-            isLoading = false
         }
+    }
+
+    private func extractDomain(from url: String) -> String {
+        guard let urlComponents = URLComponents(string: url),
+              let host = urlComponents.host else {
+            return "product"
+        }
+
+        // Remove www. and common subdomains
+        let domain = host.replacingOccurrences(of: "^www\\.", with: "", options: .regularExpression)
+
+        // Extract main domain name (e.g., "amazon.com" -> "Amazon")
+        let parts = domain.components(separatedBy: ".")
+        if let mainDomain = parts.first {
+            return mainDomain.capitalized
+        }
+
+        return domain
     }
 
     func deleteItem(_ item: TrackedItem) {
@@ -175,7 +221,10 @@ class ShopperPlusViewModel: ObservableObject {
             do {
                 isLoading = true
 
-                // Get price updates from backend
+                // First, retry any failed items (items with "Loading..." or "Failed to load" titles)
+                await retryFailedItems()
+
+                // Then get price updates from backend
                 let updates = try await networkingService.syncPrices(for: trackedItems)
 
                 // Apply updates to tracked items
@@ -210,6 +259,27 @@ class ShopperPlusViewModel: ObservableObject {
                 }
             }
             isLoading = false
+        }
+    }
+
+    private func retryFailedItems() async {
+        let failedItems = trackedItems.filter { item in
+            item.title?.hasPrefix("Loading") == true ||
+            item.title?.hasPrefix("Failed to load") == true
+        }
+
+        guard !failedItems.isEmpty else { return }
+
+        print("🔄 Retrying \(failedItems.count) failed items...")
+
+        for item in failedItems {
+            guard let url = item.url else { continue }
+
+            // Update title to show retrying
+            item.title = "Retrying \(extractDomain(from: url))..."
+
+            // Retry the background fetch
+            fetchProductInfoInBackground(for: item, url: url)
         }
     }
 
