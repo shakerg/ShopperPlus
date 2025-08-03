@@ -188,7 +188,11 @@ class ScraperService {
       };
 
       logger.debug(`Scraping ${url} through Tor proxy`);
-      const response = await axios.get(url, axiosConfig);
+      const response = await axios.get(url, {
+        ...axiosConfig,
+        maxRedirects: 5, // Follow redirects for short URLs like a.co
+        validateStatus: (status) => status < 400 // Accept redirects
+      });
 
       // Update domain scrape timestamp
       await cache.setDomainLastScrape(domain, Date.now().toString());
@@ -203,8 +207,9 @@ class ScraperService {
       // Parse the HTML
       const $ = cheerio.load(response.data);
       
-      // Extract product data using common selectors
-      const productData = this.extractProductData($, url);
+      // Extract product data using common selectors, pass final URL if redirected
+      const finalUrl = response.request.res.responseUrl || url;
+      const productData = this.extractProductData($, url, finalUrl);
       
       return productData;
 
@@ -227,6 +232,8 @@ class ScraperService {
       
       const response = await axios.get(url, {
         timeout: 15000,
+        maxRedirects: 5,
+        validateStatus: (status) => status < 400,
         headers: {
           'User-Agent': userAgent,
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -235,7 +242,8 @@ class ScraperService {
       });
 
       const $ = cheerio.load(response.data);
-      return this.extractProductData($, url);
+      const finalUrl = response.request.res.responseUrl || url;
+      return this.extractProductData($, url, finalUrl);
 
     } catch (error) {
       logger.error(`Direct scraping failed for ${url}:`, error.message);
@@ -243,24 +251,55 @@ class ScraperService {
     }
   }
 
-  extractProductData($, url) {
-    const domain = new URL(url).hostname.toLowerCase();
+  extractProductData($, url, finalUrl = null) {
+    // Use the final URL after redirects if available, otherwise use original
+    const urlToCheck = finalUrl || url;
+    const domain = new URL(urlToCheck).hostname.toLowerCase();
     
     let title, price, imageUrl, currency = 'USD';
 
-    // Amazon
-    if (domain.includes('amazon.')) {
+    logger.debug(`Extracting data for domain: ${domain} (original: ${url})`);
+
+    // Amazon - Enhanced extraction (includes a.co redirects)
+    if (domain.includes('amazon.') || url.includes('a.co/')) {
+      // Enhanced title extraction with more selectors
       title = $('#productTitle').text().trim() || 
               $('[data-cy="title"]').text().trim() ||
-              $('.product-title').text().trim();
+              $('.product-title').text().trim() ||
+              $('h1 span').text().trim() ||
+              $('.a-size-large.a-size-base-plus').text().trim() ||
+              $('.a-size-extra-large').text().trim();
       
-      price = $('.a-price-whole').first().text().replace(/[^0-9.]/g, '') ||
-              $('.a-offscreen').first().text().replace(/[^0-9.]/g, '') ||
-              $('.a-price .a-offscreen').first().text().replace(/[^0-9.]/g, '');
+      // Enhanced price extraction with more patterns
+      let priceText = $('.a-price-whole').first().text() ||
+                     $('.a-offscreen').first().text() ||
+                     $('.a-price .a-offscreen').first().text() ||
+                     $('.a-price-range').first().text() ||
+                     $('[data-asin-price]').first().text() ||
+                     $('.a-price.a-text-price.a-size-medium.apexPriceToPay').text() ||
+                     $('.a-price-symbol').parent().text() ||
+                     $('span.a-price.a-text-price.a-size-medium').text() ||
+                     $('.pricePerUnit').text() ||
+                     $('meta[property="product:price:amount"]').attr('content');
       
+      if (priceText) {
+        // Clean price text more thoroughly
+        price = priceText.replace(/[^0-9.,]/g, '').replace(/,/g, '');
+        // Handle cases like "12.99" or "12,99"
+        const priceMatch = price.match(/\d+\.?\d*/);
+        price = priceMatch ? priceMatch[0] : null;
+      }
+      
+      // Enhanced image extraction
       imageUrl = $('#landingImage').attr('src') || 
                  $('.a-dynamic-image').first().attr('src') ||
-                 $('img[data-old-hires]').first().attr('data-old-hires');
+                 $('img[data-old-hires]').first().attr('data-old-hires') ||
+                 $('img[data-a-hires]').first().attr('data-a-hires') ||
+                 $('#imgTagWrapperId img').attr('src') ||
+                 $('.a-dynamic-image.a-stretch-horizontal').first().attr('src') ||
+                 $('meta[property="og:image"]').attr('content');
+
+      logger.debug(`Amazon extraction - Title: "${title}", Price: "${priceText}" -> "${price}", Image: "${imageUrl}"`);
     }
     
     // Target
@@ -317,6 +356,19 @@ class ScraperService {
       imageUrl = $('meta[property="og:image"]').attr('content') ||
                  $('.product-image img, .item-image img').first().attr('src') ||
                  $('img[alt*="product"], img[alt*="item"]').first().attr('src');
+    }
+
+    // Debug: Log what we found and what's available if extraction failed
+    if (domain.includes('amazon.') && (!title || !price || !imageUrl)) {
+      logger.debug('Amazon scraping debug - Available selectors:');
+      logger.debug(`Title selectors found: ${$('#productTitle').length}, ${$('[data-cy="title"]').length}, ${$('.product-title').length}`);
+      logger.debug(`Price selectors found: ${$('.a-price-whole').length}, ${$('.a-offscreen').length}, ${$('.a-price .a-offscreen').length}`);
+      logger.debug(`Image selectors found: ${$('#landingImage').length}, ${$('.a-dynamic-image').length}, ${$('img[data-old-hires]').length}`);
+      
+      // Log some of the actual HTML structure for debugging
+      logger.debug('Sample title elements:', $('h1').map((i, el) => $(el).text().trim()).get().slice(0, 3));
+      logger.debug('Sample price elements:', $('[class*="price"]').map((i, el) => $(el).text().trim()).get().slice(0, 5));
+      logger.debug('Sample image elements:', $('img').map((i, el) => $(el).attr('src')).get().slice(0, 3));
     }
 
     // Clean up extracted data
