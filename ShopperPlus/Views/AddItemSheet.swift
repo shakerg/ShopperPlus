@@ -92,12 +92,19 @@ struct AddItemSheet: View {
                         .foregroundColor(.primary)
 
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
-                        SupportedStoreRow(name: "Amazon", domain: "amazon.com", icon: "a.circle.fill")
-                        SupportedStoreRow(name: "eBay", domain: "ebay.com", icon: "e.circle.fill")
-                        SupportedStoreRow(name: "Target", domain: "target.com", icon: "t.circle.fill")
-                        SupportedStoreRow(name: "Best Buy", domain: "bestbuy.com", icon: "b.circle.fill")
-                        SupportedStoreRow(name: "Walmart", domain: "walmart.com", icon: "w.circle.fill")
-                        SupportedStoreRow(name: "More coming soon!", domain: "", icon: "plus.circle.fill")
+                        SupportedStoreRow(
+                            name: "Amazon", 
+                            domain: "amazon.com", 
+                            icon: "a.circle.fill", 
+                            customImage: "amazon-a-smile", 
+                            isEnabled: true, 
+                            affiliateURL: "https://www.amazon.com?tag=vuwing-20"
+                        )
+                        SupportedStoreRow(name: "eBay", domain: "ebay.com", icon: "e.circle.fill", isEnabled: false)
+                        SupportedStoreRow(name: "Target", domain: "target.com", icon: "t.circle.fill", isEnabled: false)
+                        SupportedStoreRow(name: "Best Buy", domain: "bestbuy.com", icon: "b.circle.fill", isEnabled: false)
+                        SupportedStoreRow(name: "Walmart", domain: "walmart.com", icon: "w.circle.fill", isEnabled: false)
+                        SupportedStoreRow(name: "More coming soon!", domain: "", icon: "plus.circle.fill", isEnabled: false)
                     }
                 }
                 .padding(.horizontal)
@@ -174,28 +181,62 @@ struct SupportedStoreRow: View {
     let name: String
     let domain: String
     let icon: String
+    let customImage: String?
+    let isEnabled: Bool
+    let affiliateURL: String?
+
+    init(name: String, domain: String, icon: String, customImage: String? = nil, isEnabled: Bool = true, affiliateURL: String? = nil) {
+        self.name = name
+        self.domain = domain
+        self.icon = icon
+        self.customImage = customImage
+        self.isEnabled = isEnabled
+        self.affiliateURL = affiliateURL
+    }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .foregroundColor(.blue)
-                .font(.bodyRoboto)
+        Button(action: {
+            if let affiliateURL = affiliateURL, let url = URL(string: affiliateURL) {
+                UIApplication.shared.open(url)
+            }
+        }) {
+            HStack(spacing: 8) {
+                if let customImage = customImage, isEnabled {
+                    Image(customImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
+                } else {
+                    Image(systemName: icon)
+                        .foregroundColor(isEnabled ? .blue : .gray)
+                        .font(.bodyRoboto)
+                }
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name)
-                    .font(.bodyRoboto)
-                    .foregroundColor(.primary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(.bodyRoboto)
+                        .foregroundColor(isEnabled ? .primary : .gray)
 
-                if !domain.isEmpty {
-                    Text(domain)
-                        .font(.caption1Roboto)
-                        .foregroundColor(.secondary)
+                    if !domain.isEmpty {
+                        Text(domain)
+                            .font(.caption1Roboto)
+                            .foregroundColor(isEnabled ? .secondary : .gray)
+                    }
+                }
+
+                Spacer()
+                
+                if affiliateURL != nil {
+                    Image(systemName: "link")
+                        .font(.caption)
+                        .foregroundColor(.blue)
                 }
             }
-
-            Spacer()
+            .padding(.vertical, 4)
+            .opacity(isEnabled ? 1.0 : 0.6)
         }
-        .padding(.vertical, 4)
+        .buttonStyle(PlainButtonStyle())
+        .disabled(!isEnabled && affiliateURL == nil)
     }
 }
 

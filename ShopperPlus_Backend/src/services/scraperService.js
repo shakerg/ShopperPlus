@@ -227,28 +227,72 @@ class ScraperService {
   }
 
   async scrapeProductDirect(url) {
-    try {
-      const userAgent = this.userAgents[Math.floor(Math.random() * this.userAgents.length)];
-      
-      const response = await axios.get(url, {
-        timeout: 15000,
-        maxRedirects: 5,
-        validateStatus: (status) => status < 400,
-        headers: {
-          'User-Agent': userAgent,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5'
+    return new Promise(async (resolve, reject) => {
+      // Set up a hard timeout that will reject the promise after 20 seconds
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Scraping timeout after 20 seconds'));
+      }, 20000);
+
+      try {
+        const userAgent = this.userAgents[Math.floor(Math.random() * this.userAgents.length)];
+        
+        logger.info(`Starting direct scrape for: ${url}`);
+        
+        // Try with Tor proxy first, fallback to direct if Tor fails
+        let axiosConfig = {
+          timeout: 10000, // Reduced timeout for faster fallback
+          maxRedirects: 5,
+          validateStatus: (status) => status < 400,
+          headers: {
+            'User-Agent': userAgent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+          }
+        };
+
+        // Try Tor proxy first
+        try {
+          logger.info(`Attempting scrape through Tor proxy: ${this.torProxyHost}:${this.torProxyPort}`);
+          const proxyAgent = new SocksProxyAgent(`socks5://${this.torProxyHost}:${this.torProxyPort}`);
+          axiosConfig.httpsAgent = proxyAgent;
+          axiosConfig.httpAgent = proxyAgent;
+          
+          const response = await axios.get(url, axiosConfig);
+          logger.info(`Successfully scraped via Tor: ${url}`);
+          
+          clearTimeout(timeoutId);
+          const $ = cheerio.load(response.data);
+          const finalUrl = response.request.res.responseUrl || url;
+          const result = this.extractProductData($, url, finalUrl);
+          resolve(result);
+          return;
+          
+        } catch (torError) {
+          logger.warn(`Tor proxy failed for ${url}: ${torError.message}, trying direct connection`);
+          
+          // Fallback to direct connection (without proxy)
+          delete axiosConfig.httpsAgent;
+          delete axiosConfig.httpAgent;
+          
+          const response = await axios.get(url, axiosConfig);
+          logger.info(`Successfully scraped via direct connection: ${url}`);
+          
+          clearTimeout(timeoutId);
+          const $ = cheerio.load(response.data);
+          const finalUrl = response.request.res.responseUrl || url;
+          const result = this.extractProductData($, url, finalUrl);
+          resolve(result);
         }
-      });
 
-      const $ = cheerio.load(response.data);
-      const finalUrl = response.request.res.responseUrl || url;
-      return this.extractProductData($, url, finalUrl);
-
-    } catch (error) {
-      logger.error(`Direct scraping failed for ${url}:`, error.message);
-      throw error;
-    }
+      } catch (error) {
+        clearTimeout(timeoutId);
+        logger.error(`Direct scraping failed for ${url}:`, error.message);
+        reject(error);
+      }
+    });
   }
 
   extractProductData($, url, finalUrl = null) {

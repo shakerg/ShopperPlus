@@ -69,10 +69,10 @@ struct EmptyStateView: View {
                     .foregroundColor(.secondary)
 
                 HStack(spacing: 16) {
-                    StoreIconView(name: "Amazon", color: .orange)
-                    StoreIconView(name: "eBay", color: .blue)
-                    StoreIconView(name: "Target", color: .red)
-                    StoreIconView(name: "Best Buy", color: .blue)
+                    StoreIconView(name: "Amazon", color: .orange, customImage: "amazon-a-smile", isEnabled: true, affiliateURL: "https://www.amazon.com?tag=vuwing-20")
+                    StoreIconView(name: "Walmart", color: .blue, isEnabled: false)
+                    StoreIconView(name: "Target", color: .red, isEnabled: false)
+                    StoreIconView(name: "Best Buy", color: .blue, isEnabled: false)
                 }
             }
             .padding(.bottom, 40)
@@ -85,22 +85,49 @@ struct EmptyStateView: View {
 struct StoreIconView: View {
     let name: String
     let color: Color
+    let customImage: String?
+    let isEnabled: Bool
+    let affiliateURL: String?
+
+    init(name: String, color: Color, customImage: String? = nil, isEnabled: Bool = true, affiliateURL: String? = nil) {
+        self.name = name
+        self.color = color
+        self.customImage = customImage
+        self.isEnabled = isEnabled
+        self.affiliateURL = affiliateURL
+    }
 
     var body: some View {
-        VStack(spacing: 4) {
-            Circle()
-                .fill(color.opacity(0.2))
-                .frame(width: 40, height: 40)
-                .overlay {
-                    Text(String(name.prefix(1)))
-                        .font(.robotoBold(size: 16))
-                        .foregroundColor(color)
-                }
+        Button(action: {
+            if let affiliateURL = affiliateURL, let url = URL(string: affiliateURL) {
+                UIApplication.shared.open(url)
+            }
+        }) {
+            VStack(spacing: 4) {
+                Circle()
+                    .fill((isEnabled ? color : .gray).opacity(0.2))
+                    .frame(width: 40, height: 40)
+                    .overlay {
+                        if let customImage = customImage, isEnabled {
+                            Image(customImage)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 20, height: 20)
+                        } else {
+                            Text(String(name.prefix(1)))
+                                .font(.robotoBold(size: 16))
+                                .foregroundColor(isEnabled ? color : .gray)
+                        }
+                    }
 
-            Text(name)
-                .font(.caption2Roboto)
-                .foregroundColor(.secondary)
+                Text(name)
+                    .font(.caption2Roboto)
+                    .foregroundColor(isEnabled ? .secondary : .gray)
+            }
+            .opacity(isEnabled ? 1.0 : 0.6)
         }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(!isEnabled && affiliateURL == nil)
     }
 }
 

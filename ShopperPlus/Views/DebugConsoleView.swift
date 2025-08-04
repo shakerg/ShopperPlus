@@ -346,7 +346,7 @@ struct APITestRowView: View {
 struct CloudKitStatusCard: View {
     @StateObject private var cloudKitManager = CloudKitManager.shared
     @StateObject private var debugHelpers = DebugHelpers.shared
-    
+
     @State private var containerStatus: String = "Unknown"
     @State private var accountStatus: String = "Unknown"
     @State private var syncStatus: String = "Unknown"
@@ -361,9 +361,9 @@ struct CloudKitStatusCard: View {
                 Text("CloudKit Status")
                     .font(.headlineRoboto)
                     .fontWeight(.semibold)
-                
+
                 Spacer()
-                
+
                 if isLoading {
                     ProgressView()
                         .scaleEffect(0.8)
@@ -381,7 +381,7 @@ struct CloudKitStatusCard: View {
                 cloudKitRow("iCloud Account", accountStatus)
                 cloudKitRow("Sync Status", syncStatus)
                 cloudKitRow("Container ID", SecretsManager.shared.cloudKitContainerID)
-                
+
                 if let lastUpdated = lastUpdated {
                     cloudKitRow("Last Checked", DateFormatter.localizedString(from: lastUpdated, dateStyle: .none, timeStyle: .medium))
                 }
@@ -394,7 +394,7 @@ struct CloudKitStatusCard: View {
             refreshStatus()
         }
     }
-    
+
     private func cloudKitRow(_ title: String, _ value: String) -> some View {
         HStack {
             Text(title)
@@ -407,7 +407,7 @@ struct CloudKitStatusCard: View {
                 .foregroundColor(getStatusColor(for: value))
         }
     }
-    
+
     private func getStatusColor(for status: String) -> Color {
         if status.contains("✅") || status.contains("Connected") || status.contains("Available") || status.contains("Success") {
             return .green
@@ -419,13 +419,13 @@ struct CloudKitStatusCard: View {
             return .primary
         }
     }
-    
+
     private func refreshStatus() {
         isLoading = true
-        
+
         Task {
             let result = await debugHelpers.testCloudKitConnection()
-            
+
             await MainActor.run {
                 // Parse the results
                 if result.success {
@@ -435,7 +435,7 @@ struct CloudKitStatusCard: View {
                     containerStatus = "❌ \(result.status)"
                     accountStatus = result.details.contains("No Account") ? "❌ Not Signed In" : "❓ \(result.status)"
                 }
-                
+
                 // Sync status from CloudKitManager
                 switch cloudKitManager.syncStatus {
                 case .idle:
@@ -447,7 +447,7 @@ struct CloudKitStatusCard: View {
                 case .failed(let error):
                     syncStatus = "❌ Failed: \(error.localizedDescription)"
                 }
-                
+
                 lastUpdated = Date()
                 isLoading = false
             }

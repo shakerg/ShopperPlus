@@ -1,1 +1,5 @@
 - never expose our URL, it is located in the Secrets.plist file
+- we docker build using the flags --platform linux/amd64
+- use the registry.redcloud.land repository for our images
+- our backend images is shopper-plus-backend:x.y.z
+- use the -k flag for curl commands

@@ -146,6 +146,22 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                 }
+
+                // Trademark Disclaimer Section
+                Section("Trademark Disclaimer") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("All product names, company names, brand names, trademarks and logos mentioned or shown in this app are the property of their respective owners.")
+                            .font(.caption1Roboto)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text("The use of these trademarks is for identification and reference purposes only.")
+                            .font(.caption1Roboto)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 4)
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.large)

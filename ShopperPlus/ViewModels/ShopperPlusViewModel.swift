@@ -86,7 +86,7 @@ class ShopperPlusViewModel: ObservableObject {
         // Step 1: Create and store item immediately with placeholder data
         let newItem = TrackedItem(
             context: viewContext,
-            title: "Loading \(domain)...",
+            title: "Loading \(domain)... (Amazon may take 1-2 minutes)",
             url: url,
             imageUrl: nil,
             currentPrice: nil,
@@ -130,22 +130,28 @@ class ShopperPlusViewModel: ObservableObject {
                 // Fetch product info from backend in background
                 let productInfo = try await networkingService.fetchProductInfo(from: url)
 
-                // Update the existing item with real data
-                item.title = productInfo.title
-                item.imageUrl = productInfo.imageUrl
-                item.currentPrice = productInfo.price ?? 0.0
-                item.currency = productInfo.currency
-                item.lastUpdated = productInfo.lastUpdated
+                // Update the existing item with real data on the main actor
+                await MainActor.run {
+                    item.title = productInfo.title
+                    item.imageUrl = productInfo.imageUrl
+                    item.currentPrice = productInfo.price ?? 0.0
+                    item.currency = productInfo.currency
+                    item.lastUpdated = productInfo.lastUpdated
 
-                // Add initial price entry if available
-                if let price = productInfo.price {
-                    let priceEntry = PriceEntry(
-                        price: price,
-                        currency: productInfo.currency,
-                        timestamp: productInfo.lastUpdated,
-                        source: .backend
-                    )
-                    item.priceHistory = [priceEntry]
+                    // Add initial price entry if available
+                    if let price = productInfo.price {
+                        let priceEntry = PriceEntry(
+                            price: price,
+                            currency: productInfo.currency,
+                            timestamp: productInfo.lastUpdated,
+                            source: .backend
+                        )
+                        item.priceHistory = [priceEntry]
+                    }
+
+                    // Trigger UI update by reassigning the array
+                    // This ensures SwiftUI detects the change
+                    self.trackedItems = self.trackedItems
                 }
 
                 // Save updated item to CloudKit
@@ -156,8 +162,17 @@ class ShopperPlusViewModel: ObservableObject {
             } catch {
                 print("⚠️ Background fetch failed for: \(url), Error: \(error)")
 
-                // Update item to show fetch failed
-                item.title = "Failed to load \(extractDomain(from: url))"
+                // Update item to show fetch failed on the main actor
+                await MainActor.run {
+                    let domain = extractDomain(from: url)
+                    if let urlError = error as? URLError, urlError.code == .timedOut {
+                        item.title = "\(domain) - Scraping timed out, will retry automatically"
+                    } else {
+                        item.title = "Failed to load \(domain) - Tap sync to retry"
+                    }
+                    // Trigger UI update
+                    self.trackedItems = self.trackedItems
+                }
 
                 // Try to save the error state
                 try? await cloudKitManager.saveTrackedItem(item)
@@ -275,8 +290,12 @@ class ShopperPlusViewModel: ObservableObject {
         for item in failedItems {
             guard let url = item.url else { continue }
 
-            // Update title to show retrying
-            item.title = "Retrying \(extractDomain(from: url))..."
+            // Update title to show retrying on main actor
+            await MainActor.run {
+                item.title = "Retrying \(extractDomain(from: url))..."
+                // Trigger UI update
+                self.trackedItems = self.trackedItems
+            }
 
             // Retry the background fetch
             fetchProductInfoInBackground(for: item, url: url)

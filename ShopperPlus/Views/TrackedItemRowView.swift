@@ -55,7 +55,7 @@ struct TrackedItemRowView: View {
 
                 // Current Price
                 if isLoadingItem {
-                    Text("Loading price...")
+                    Text("Analyzing product... This may take up to 2 minutes for Amazon")
                         .font(.bodyRoboto)
                         .foregroundColor(.secondary)
                 } else if item.currentPrice > 0 {
@@ -70,7 +70,7 @@ struct TrackedItemRowView: View {
 
                 // Price Change Indicator or Loading Status
                 if isLoadingItem {
-                    Text("Fetching product info...")
+                    Text("Scraping product info from retailer...")
                         .font(.caption1Roboto)
                         .foregroundColor(.orange)
                 } else if let priceChange = calculatePriceChange() {

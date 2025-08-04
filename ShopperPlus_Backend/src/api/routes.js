@@ -373,11 +373,14 @@ v1Router.delete('/watchlist/:userId/:productId', async (req, res, next) => {
   }
 });
 
-// POST /api/v1/products/info - Get product information (for iOS app compatibility)
+// POST /api/v1/products/info - Get product information with synchronous scraping
 v1Router.post('/products/info', async (req, res, next) => {
   try {
+    logger.info('Product info request received:', req.body);
+    
     const { error, value } = productSchema.validate(req.body);
     if (error) {
+      logger.warn('Validation error:', error.details[0].message);
       return res.status(400).json({
         success: false,
         error: 'Validation Error',
@@ -386,8 +389,9 @@ v1Router.post('/products/info', async (req, res, next) => {
     }
 
     const { url } = value;
+    logger.info(`Processing product info request for: ${url}`);
 
-    // Check if product already exists and has data
+    // Check if product already exists and has recent data
     const existingProduct = await database.query(
       `SELECT id, title, image_url, current_price, currency, last_checked, 
               created_at
@@ -398,47 +402,94 @@ v1Router.post('/products/info', async (req, res, next) => {
 
     if (existingProduct.rows.length > 0) {
       const product = existingProduct.rows[0];
+      const lastChecked = product.last_checked;
+      const dataAge = lastChecked ? Date.now() - new Date(lastChecked).getTime() : Infinity;
       
-      // Return existing product data in the format iOS app expects
-      return res.json({
-        title: product.title || 'Product',
-        price: product.current_price,
-        currency: product.currency || 'USD',
-        imageUrl: product.image_url,
-        availability: product.current_price ? 'Available' : 'Unknown',
-        lastUpdated: product.last_checked || product.created_at
-      });
+      // If data is less than 1 hour old and has real product data, return it immediately
+      if (dataAge < 3600000 && product.title && 
+          product.title !== 'Loading product info...' && 
+          !product.title.startsWith('Loading')) {
+        logger.info(`Returning cached product data for: ${url}`);
+        return res.json({
+          title: product.title || 'Product',
+          price: product.current_price,
+          currency: product.currency || 'USD',
+          imageUrl: product.image_url,
+          availability: product.current_price ? 'Available' : 'Unknown',
+          lastUpdated: product.last_checked || product.created_at
+        });
+      }
     }
 
-    // Product doesn't exist, create it and queue for scraping
-    const result = await database.query(
-      'INSERT INTO products (canonical_url) VALUES ($1) RETURNING id, created_at',
-      [url]
-    );
+    // Create new product or update existing one that needs refresh
+    let productId, createdAt;
+    
+    if (existingProduct.rows.length > 0) {
+      // Update existing product
+      productId = existingProduct.rows[0].id;
+      createdAt = existingProduct.rows[0].created_at;
+      logger.info(`Refreshing existing product ${productId} for: ${url}`);
+    } else {
+      // Create new product
+      const result = await database.query(
+        'INSERT INTO products (canonical_url) VALUES ($1) RETURNING id, created_at',
+        [url]
+      );
+      productId = result.rows[0].id;
+      createdAt = result.rows[0].created_at;
+      logger.info(`Created new product ${productId} for: ${url}`);
+    }
 
-    const productId = result.rows[0].id;
-    const createdAt = result.rows[0].created_at;
-
-    // Queue for immediate scraping
-    await database.query(
-      'INSERT INTO scrape_jobs (product_id, status) VALUES ($1, $2)',
-      [productId, 'pending']
-    );
-
-    // Trigger scraping process
-    scraperService.processQueue().catch(error => {
-      logger.error('Failed to trigger scraper:', error);
-    });
-
-    // Return basic info while scraping happens in background
-    res.json({
-      title: 'Loading product info...',
-      price: null,
-      currency: 'USD',
-      imageUrl: null,
-      availability: 'Checking...',
-      lastUpdated: createdAt
-    });
+    // Scrape directly instead of using the queue system
+    try {
+      logger.info(`Starting direct scraping for product ${productId}: ${url}`);
+      
+      // Scrape the product directly
+      const scrapedData = await scraperService.scrapeProductDirect(url);
+      
+      if (scrapedData && scrapedData.title) {
+        // Update the product with scraped data
+        await database.query(
+          `UPDATE products 
+           SET title = $1, current_price = $2, currency = $3, image_url = $4, 
+               last_checked = CURRENT_TIMESTAMP 
+           WHERE id = $5`,
+          [scrapedData.title, scrapedData.price, scrapedData.currency || 'USD', 
+           scrapedData.imageUrl, productId]
+        );
+        
+        logger.info(`Successfully scraped product ${productId}: ${scrapedData.title}`);
+        
+        return res.json({
+          title: scrapedData.title,
+          price: scrapedData.price,
+          currency: scrapedData.currency || 'USD',
+          imageUrl: scrapedData.imageUrl,
+          availability: scrapedData.price ? 'Available' : 'Unknown',
+          lastUpdated: new Date().toISOString()
+        });
+      } else {
+        logger.warn(`Scraping failed for product ${productId}: ${url}`);
+        
+        return res.json({
+          title: 'Product information unavailable',
+          price: null,
+          currency: 'USD',
+          imageUrl: null,
+          availability: 'Unknown',
+          lastUpdated: new Date().toISOString()
+        });
+      }
+      
+    } catch (scrapingError) {
+      logger.error(`Scraping error for product ${productId}:`, scrapingError);
+      
+      return res.status(500).json({
+        success: false,
+        error: 'Scraping failed',
+        details: scrapingError.message
+      });
+    }
 
   } catch (error) {
     next(error);

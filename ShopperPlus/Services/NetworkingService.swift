@@ -28,8 +28,8 @@ class NetworkingService: ObservableObject {
     private init() {
         // Configure URLSession with proper settings for product scraping operations
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 45.0 // Increased for scraping operations
-        config.timeoutIntervalForResource = 120.0 // Allow up to 2 minutes for complex scraping
+        config.timeoutIntervalForRequest = 60.0 // Increased for Amazon scraping operations
+        config.timeoutIntervalForResource = 180.0 // Allow up to 3 minutes for complex scraping
         config.waitsForConnectivity = false
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
 
@@ -184,10 +184,10 @@ class NetworkingService: ObservableObject {
     func fetchProductInfo(from url: String) async throws -> ProductInfo {
         print("🌐 Starting product info fetch for: \(url)")
 
-        // Start a background task for this specific operation
+        // Start a background task for this specific operation with shorter timeout tolerance
         let taskID = await MainActor.run {
             UIApplication.shared.beginBackgroundTask(withName: "ProductInfoFetch") {
-                print("⚠️ Product info fetch background task expiring")
+                print("⚠️ Product info fetch background task expiring - scraping may be taking longer than expected")
             }
         }
 
@@ -201,6 +201,13 @@ class NetworkingService: ObservableObject {
             }
         }
 
+        // Ensure task ends after maximum 25 seconds to avoid iOS termination warnings
+        Task {
+            try? await Task.sleep(for: .seconds(25))
+            print("⏰ Background task timeout reached - ending task to prevent system warnings")
+            endBackgroundTask()
+        }
+
         guard let requestURL = URL(string: "\(baseURL)/products/info") else {
             endBackgroundTask()
             throw NetworkingError.invalidURL
@@ -209,6 +216,8 @@ class NetworkingService: ObservableObject {
         var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Don't set a shorter timeout here - let the backend handle the scraping time
+        // request.timeoutInterval = 20 // Removed - use default config timeout
 
         let requestBody = ["url": url]
         do {
